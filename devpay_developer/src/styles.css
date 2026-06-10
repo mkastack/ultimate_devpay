@@ -1,0 +1,236 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system definition.
+ *
+ * The @theme inline block maps CSS custom properties to Tailwind utility
+ * classes (e.g. --color-primary -> bg-primary, text-primary).
+ *
+ * The :root and .dark blocks define the actual color values using oklch.
+ * All colors MUST use oklch format.
+ *
+ * To add a new semantic color:
+ * 1. Add the variable to :root (light value) and .dark (dark value)
+ * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ */
+
+@theme inline {
+  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-cyan-brand: var(--cyan-brand);
+  --color-gold-brand: var(--gold-brand);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* DevPay Africa palette — exact hex from spec, expressed in oklch */
+  --background: oklch(0.205 0.043 252);          /* #0A1628 */
+  --foreground: oklch(1 0 0);                    /* #FFFFFF */
+  --surface: oklch(0.255 0.052 256);             /* #0F1F3D */
+  --surface-hover: oklch(0.293 0.057 258);       /* #162240 */
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+
+  --cyan-brand: oklch(0.762 0.13 178);           /* #00C6A7 */
+  --gold-brand: oklch(0.769 0.158 65);           /* #F5A623 */
+
+  --primary: var(--cyan-brand);
+  --primary-foreground: oklch(0.205 0.043 252);
+  --secondary: var(--surface-hover);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-hover);
+  --muted-foreground: oklch(0.708 0.046 255);    /* #8BA3C7 */
+  --text-secondary: oklch(0.708 0.046 255);      /* #8BA3C7 */
+  --text-muted: oklch(0.491 0.043 258);          /* #4A6080 */
+  --accent: var(--cyan-brand);
+  --accent-foreground: oklch(0.205 0.043 252);
+
+  --success: var(--cyan-brand);                  /* #00C6A7 */
+  --warning: var(--gold-brand);                  /* #F5A623 */
+  --error: oklch(0.672 0.218 17);                /* #FF4D6A */
+  --destructive: var(--error);
+  --destructive-foreground: var(--foreground);
+
+  --border: oklch(0.343 0.054 256);              /* #1E3A5F */
+  --input: var(--border);
+  --ring: var(--cyan-brand);
+
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--cyan-brand);
+  --sidebar-primary-foreground: oklch(0.205 0.043 252);
+  --sidebar-accent: var(--surface-hover);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--cyan-brand);
+
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.20);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.30);
+  --shadow-lg: 0 24px 64px rgba(0,0,0,0.40);
+  --shadow-cyan: 0 8px 32px rgba(0,198,167,0.20);
+  --shadow-gold: 0 8px 32px rgba(245,166,35,0.20);
+}
+
+.light {
+  --background: oklch(0.985 0.003 247);          /* near-white */
+  --foreground: oklch(0.205 0.043 252);          /* deep navy text */
+  --surface: oklch(1 0 0);                       /* pure white cards */
+  --surface-hover: oklch(0.965 0.008 252);
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+
+  --primary: var(--cyan-brand);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: var(--surface-hover);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-hover);
+  --muted-foreground: oklch(0.45 0.04 256);
+  --text-secondary: oklch(0.40 0.04 256);
+  --text-muted: oklch(0.55 0.03 258);
+  --accent: var(--cyan-brand);
+  --accent-foreground: oklch(1 0 0);
+
+  --border: oklch(0.91 0.015 256);
+  --input: var(--border);
+  --ring: var(--cyan-brand);
+
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-accent: var(--surface-hover);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+
+  --shadow-sm: 0 1px 3px rgba(15,31,61,0.06);
+  --shadow-md: 0 8px 24px rgba(15,31,61,0.08);
+  --shadow-lg: 0 24px 64px rgba(15,31,61,0.12);
+}
+
+.light .force-white,
+.light .force-white .text-white,
+.light .force-white.text-white {
+  color: oklch(1 0 0) !important;
+}
+.light .text-white {
+  color: var(--foreground) !important;
+}
+.light .force-white .text-white,
+.light .force-white.text-white {
+  color: oklch(1 0 0) !important;
+}
+.light [class*="bg-[color:var(--cyan-brand)]"] {
+  color: oklch(0.205 0.043 252) !important;
+}
+.light .skeleton {
+  background: linear-gradient(90deg, #eef2f7 25%, #f7f9fc 50%, #eef2f7 75%);
+  background-size: 200% 100%;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer utilities {
+  .font-display { font-family: var(--font-display); }
+  .font-mono-nums { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  .shadow-cyan { box-shadow: var(--shadow-cyan); }
+  .shadow-gold { box-shadow: var(--shadow-gold); }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, #0F1F3D 25%, #162240 50%, #0F1F3D 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes soft-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+  .animate-soft-pulse { animation: soft-pulse 1.5s ease-in-out infinite; }
+
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+}
