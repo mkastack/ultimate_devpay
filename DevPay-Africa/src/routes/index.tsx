@@ -60,10 +60,10 @@ function Landing() {
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg" className="bg-[image:var(--gradient-primary)] text-primary-foreground hover:opacity-90 shadow-[var(--shadow-glow)] h-12 px-6">
-              <Link to="/dashboard">Hire a Developer <ArrowRight className="ml-2 h-4 w-4" /></Link>
+              <Link to="/signup">Hire a Developer <ArrowRight className="ml-2 h-4 w-4" /></Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="h-12 px-6 border-border/60 hover:bg-surface">
-              <Link to="/dashboard">Start Earning</Link>
+              <Link to="/signup">Start Earning</Link>
             </Button>
           </div>
 

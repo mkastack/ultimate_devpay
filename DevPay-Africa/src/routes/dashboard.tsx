@@ -1,46 +1,50 @@
-import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 import { useAuth } from "@/integrations/supabase/auth-context";
-import { useAuthStore } from "@/lib/stores/auth-store";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { getHomePathForRole } from "@/lib/role-routes";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({ meta: [{ title: "Redirecting — DevPay Africa" }] }),
   component: DashboardDispatcher,
 });
 
-
 function DashboardDispatcher() {
-  const { profile, session, loading } = useAuth();
+  const { profile, session, loading, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const retried = useRef(false);
 
-  // dev override: allow forcing a role via query `?dev_role=developer` or localStorage `devpay_dev_role`
   const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
   const devRole = url?.searchParams.get("dev_role") ?? (typeof window !== "undefined" ? localStorage.getItem("devpay_dev_role") : null);
 
-  // Helpful debug logs for diagnosing spinner state
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.debug("DashboardDispatcher state:", { loading, session, profile, devRole });
-  }, [loading, session, profile, devRole]);
-
   useEffect(() => {
     if (loading) return;
-    // If a dev override is present, use it immediately (dev helper)
+
     if (devRole) {
-      if (devRole === "developer") navigate({ to: "/developer" });
-      else navigate({ to: "/client" });
+      navigate({ to: devRole === "developer" ? "/developer" : "/client" });
       return;
     }
-    if (!session) return;
-    if (profile) {
-      if (profile.role === "developer") {
-        navigate({ to: "/developer" });
-      } else {
-        navigate({ to: "/client" });
-      }
+
+    if (!session) {
+      navigate({ to: "/login" });
+      return;
     }
-  }, [profile, session, loading, navigate, devRole]);
+
+    if (profile) {
+      navigate({ to: getHomePathForRole(profile.role) });
+      return;
+    }
+
+    if (!retried.current) {
+      retried.current = true;
+      void refreshProfile();
+      return;
+    }
+
+    toast.error("Could not load your profile. Try signing out and back in.");
+    navigate({ to: "/login" });
+  }, [profile, session, loading, navigate, devRole, refreshProfile]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">

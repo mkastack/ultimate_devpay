@@ -1,693 +1,610 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Globe,
-  Smartphone,
-  Database,
-  Sparkles,
-  Plus,
-  Trash2,
-  ArrowLeft,
-  ArrowRight,
-  Loader2,
-  ShieldCheck,
-  BadgeCheck,
-  Lightbulb,
-  X,
-} from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/integrations/supabase/auth-context";
-import { toast } from "sonner";
 
-import { captureException } from "@/integrations/sentry";
-import { sendPaymentConfirmationEmail } from "@/integrations/resend";
-import {
-  initiateEscrowPayment,
-  calculateTotalWithFee,
-} from "@/integrations/paystack";
-import { verifyPaystackPaymentFn } from "@/integrations/paystack.server";
+import { TopBar } from "@/components/hirer-dashboard/TopBar";
+import { Check, ArrowLeft, ArrowRight, Lock, Sparkles } from "lucide-react";
+import { fmtUSD, ghsToUsd } from "@/lib/hirer-format";
 
 export const Route = createFileRoute("/client/post-job")({
-  head: () => ({ meta: [{ title: "Post a Job — DevPay Africa" }] }),
-  component: PostJob,
+  head: () => ({ meta: [{ title: "Post a Job · DevPay Africa" }] }),
+  component: PostJobPage,
 });
 
-const categories = [
-  { id: "web", label: "Web Development", icon: Globe },
-  { id: "mobile", label: "Mobile Apps", icon: Smartphone },
-  { id: "backend", label: "Backend & Cloud", icon: Database },
+const STEPS = ["Type", "Details", "Skills", "Budget", "Review"];
+
+const CATEGORIES = [
+  { id: "web", label: "Web Development", desc: "React, Next.js, Vue", icon: "🌐", color: "rgba(0,198,167,0.15)" },
+  { id: "mobile", label: "Mobile App", desc: "React Native, Flutter", icon: "📱", color: "rgba(56,189,248,0.15)" },
+  { id: "design", label: "UI/UX Design", desc: "Figma, Wireframes", icon: "🎨", color: "rgba(168,85,247,0.15)" },
+  { id: "ai", label: "AI Integration", desc: "LLMs, Automation", icon: "🤖", color: "rgba(16,185,129,0.15)" },
+  { id: "security", label: "Cybersecurity", desc: "Pentesting, Audits", icon: "🔒", color: "rgba(255,77,106,0.15)" },
+  { id: "backend", label: "Backend / API", desc: "Node.js, Python, Go", icon: "⚙️", color: "rgba(245,166,35,0.15)" },
+  { id: "ecom", label: "E-commerce", desc: "Shopify, WooCommerce", icon: "🛒", color: "rgba(245,166,35,0.15)" },
+  { id: "data", label: "Data / Analytics", desc: "SQL, Python, BI", icon: "📊", color: "rgba(99,102,241,0.15)" },
+  { id: "devops", label: "DevOps / Cloud", desc: "AWS, Docker, CI/CD", icon: "☁️", color: "rgba(56,189,248,0.15)" },
 ];
 
-const suggestedSkills: Record<string, string[]> = {
-  web: ["React", "TypeScript", "Tailwind", "Next.js", "Node.js"],
-  mobile: ["React Native", "Flutter", "Swift", "Kotlin"],
-  backend: ["Node.js", "Python", "PostgreSQL", "AWS", "Docker"],
-};
+const POPULAR_SKILLS = ["React", "TypeScript", "Next.js", "Node.js", "Tailwind CSS", "PostgreSQL", "Python", "Figma", "AWS", "GraphQL"];
 
-type Milestone = { title: string; amount: string; due: string };
+function PostJobPage() {
+  const [step, setStep] = useState(0);
+  const [category, setCategory] = useState<string | null>(null);
+  const [projectType, setProjectType] = useState("one-time");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [timeline, setTimeline] = useState<string | null>(null);
+  const [experience, setExperience] = useState<string | null>(null);
+  const [skills, setSkills] = useState<string[]>([]);
+  const [budgetType, setBudgetType] = useState<"fixed" | "hourly">("fixed");
+  const [budget, setBudget] = useState<string>("");
+  const [featured, setFeatured] = useState(false);
+  const [posted, setPosted] = useState(false);
 
-function PostJob() {
-  const { session, profile } = useAuth();
-  const navigate = useNavigate();
-  const [step, setStep] = useState(1);
-  const [busy, setBusy] = useState(false);
-
-  const [data, setData] = useState({
-    title: "",
-    category: "web",
-    description: "",
-    skillInput: "",
-    skills: [] as string[],
-    level: "intermediate" as "entry" | "intermediate" | "expert",
-    budget: "",
-    duration: "",
-    milestones: [{ title: "", amount: "", due: "" }] as Milestone[],
-  });
-
-  const totalMilestones = data.milestones.reduce((s, m) => s + (Number(m.amount) || 0), 0);
-  const progress = (step / 4) * 100;
-
-  const experienceLevelOptions = [
-    { id: "entry", title: "Entry", desc: "Junior talent or simple tasks.", dbValue: "Entry" },
-    {
-      id: "intermediate",
-      title: "Intermediate",
-      desc: "Solid industry experience.",
-      dbValue: "Intermediate",
-    },
-    {
-      id: "expert",
-      title: "Expert",
-      desc: "Critical systems & architectural lead.",
-      dbValue: "Expert",
-    },
-  ] as const;
-
-  const experienceLevelMap = Object.fromEntries(
-    experienceLevelOptions.map((item) => [item.id, item.dbValue]),
-  ) as Record<"entry" | "intermediate" | "expert", string>;
-
-  const addSkill = (s: string) => {
-    const v = s.trim();
-    if (!v || data.skills.includes(v)) return;
-    setData({ ...data, skills: [...data.skills, v], skillInput: "" });
-  };
-  const removeSkill = (s: string) =>
-    setData({ ...data, skills: data.skills.filter((x) => x !== s) });
-
-  const addMilestone = () =>
-    setData({ ...data, milestones: [...data.milestones, { title: "", amount: "", due: "" }] });
-  const updateMilestone = (i: number, k: keyof Milestone, v: string) => {
-    const next = [...data.milestones];
-    next[i] = { ...next[i], [k]: v };
-    setData({ ...data, milestones: next });
-  };
-  const removeMilestone = (i: number) =>
-    setData({ ...data, milestones: data.milestones.filter((_, x) => x !== i) });
-
-  const canNext =
-    (step === 1 && data.title && data.description && data.category) ||
-    (step === 2 && data.skills.length > 0) ||
-    (step === 3 && data.milestones.every((m) => m.title && m.amount));
-
-  const submit = async () => {
-    if (!session?.user) return;
-    setBusy(true);
-    try {
-      const budgetTotal = Number(data.budget) || totalMilestones;
-      const { total: totalWithFee } = calculateTotalWithFee(budgetTotal);
-
-      // Step 1: Initiate Paystack payment for escrow funding
-      let paymentReference = "";
-      try {
-        paymentReference = await initiateEscrowPayment({
-          email: session.user.email || "",
-          amount: totalWithFee,
-          jobId: "temp",
-          clientId: session.user.id,
-          firstName: profile?.full_name?.split(" ")[0] || "Client",
-          lastName: profile?.full_name?.split(" ")[1] || "",
-          description: `Escrow funding for job: ${data.title}`,
-        });
-
-        // Verify the payment
-        const verification = await verifyPaystackPaymentFn({
-          data: { reference: paymentReference },
-        });
-        if (verification.data?.status !== "success") {
-          toast.error("Payment verification failed. Please try again.");
-          setBusy(false);
-          return;
-        }
-
-        toast.success("Payment received! Creating job posting...");
-      } catch (paymentError) {
-        const msg = paymentError instanceof Error ? paymentError.message : "Payment failed";
-        toast.error(msg);
-        captureException(paymentError instanceof Error ? paymentError : new Error(msg), {
-          userId: session.user.id,
-          tags: { action: "payment-error" },
-        });
-        setBusy(false);
-        return;
-      }
-
-      // Step 2: Create the job posting
-      const dbExperienceCandidates = [experienceLevelMap[data.level], data.level].filter(
-        (v, index, self) => v && self.indexOf(v) === index,
-      );
-      const payloadBase = {
-        client_id: session.user.id,
-        title: data.title,
-        description: data.description,
-        budget_min: budgetTotal,
-        budget_max: budgetTotal,
-        budget_type: "fixed",
-        duration: data.duration || null,
-        status: "open",
-      };
-
-      let jobResult: {
-        data: { id: string } | null;
-        error: { message?: string } | null;
-      } = {
-        data: null,
-        error: null,
-      };
-      for (const experience_level of dbExperienceCandidates) {
-        jobResult = await supabase
-          .from("jobs")
-          .insert({ ...payloadBase, experience_level })
-          .select()
-          .single();
-        if (!jobResult.error && jobResult.data) break;
-      }
-
-      const { data: job, error } = jobResult;
-      if (error || !job) {
-        captureException(error || new Error("Failed to insert job row"), {
-          userId: session.user.id,
-        });
-        setBusy(false);
-        toast.error(error?.message ?? "Failed to post job");
-        return;
-      }
-
-      const jobId = (job as { id: string }).id;
-
-      // Step 3: Store payment reference in a transaction record (optional but recommended)
-      try {
-        await supabase.from("transactions").insert({
-          user_id: session.user.id,
-          type: "deposit",
-          amount: totalWithFee,
-          status: "completed",
-          reference: paymentReference,
-          job_id: jobId,
-        });
-        console.log("Transaction logged:", paymentReference);
-      } catch (err: unknown) {
-        console.log("Transaction log error (non-critical):", err);
-      }
-
-      // Step 4: Insert milestones
-      const ms = data.milestones
-        .filter((m) => m.title && m.amount)
-        .map((m, i) => ({
-          job_id: jobId,
-          title: m.title,
-          amount: Number(m.amount),
-          due_date: m.due || null,
-          position: i,
-          status: "pending",
-        }));
-      if (ms.length) {
-        const { error: msErr } = await supabase.from("milestones").insert(ms);
-        if (msErr) {
-          captureException(msErr, {
-            userId: session.user.id,
-            tags: { action: "milestones-insert", jobId },
-          });
-        }
-      }
-
-      // Step 5: Link skills to job
-      if (data.skills.length) {
-        const { data: existing } = await supabase
-          .from("skills")
-          .select("id,name")
-          .in("name", data.skills);
-        const map = new Map(
-          (existing ?? []).map((s: { id: string; name: string }) => [s.name, s.id]),
-        );
-        const rows = data.skills
-          .filter((s) => map.has(s))
-          .map((s) => ({ job_id: jobId, skill_id: map.get(s) }));
-        if (rows.length) {
-          const { error: skillErr } = await supabase.from("job_skills").insert(rows);
-          if (skillErr) {
-            captureException(skillErr, {
-              userId: session.user.id,
-              tags: { action: "skills-insert", jobId },
-            });
-          }
-        }
-      }
-
-      // Step 6: Send payment confirmation email
-      if (session.user.email) {
-        sendPaymentConfirmationEmail(
-          session.user.email,
-          profile?.full_name || "Client",
-          totalWithFee,
-          jobId,
-        );
-      }
-
-      // Step 7: Dispatch developer matching task in background
-      (async () => {
-        try {
-          const { data: devProfiles } = await supabase
-            .from("developer_profiles")
-            .select("user_id, skills, title");
-
-          if (devProfiles) {
-            const jobSkillsLower = data.skills.map((s) => s.toLowerCase());
-            const jobTitleLower = data.title.toLowerCase();
-
-            const matching = devProfiles.filter((dev) => {
-              const devSkills = (dev.skills ?? []).map((s: string) => s.toLowerCase());
-              const skillMatch = devSkills.some((s: string) => jobSkillsLower.includes(s));
-              const devTitle = (dev.title ?? "").toLowerCase();
-              const titleKeywords = jobTitleLower.split(" ");
-              const titleMatch = titleKeywords.some(
-                (word: string) => word.length > 3 && devTitle.includes(word),
-              );
-              return skillMatch || titleMatch;
-            });
-
-            matching.forEach(async (dev) => {
-              await supabase.from("notifications").insert({
-                user_id: dev.user_id,
-                type: "job_match",
-                title: "New Job Match Alert! 🚀",
-                message: `A new job matching your skill set was posted: "${data.title}". View details and submit a proposal!`,
-                link: `/jobs/${jobId}`,
-              });
-              console.log(`[Background Task] Dispatched developer notification: ${dev.user_id}`);
-            });
-          }
-        } catch (err: unknown) {
-          captureException(err, { tags: { subtask: "background-matching", jobId } });
-        }
-      })();
-
-      setBusy(false);
-      toast.success("Job posted & escrow secured! Redirecting to project page...");
-      navigate({ to: "/client/projects/$jobId", params: { jobId } });
-    } catch (e: unknown) {
-      captureException(e, { userId: session.user.id });
-      setBusy(false);
-      const errorMessage = e instanceof Error ? e.message : "An unexpected error occurred.";
-      toast.error(errorMessage);
-    }
-  };
-
-  const stepLabels = [
-    "Project Essentials",
-    "Skills & Expertise",
-    "Budget & Milestones",
-    "Final Review",
-  ];
+  if (posted) return <SuccessOverlay />;
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-2 text-sm">
-        <div className="font-medium">
-          Step {step} of 4: <span className="text-primary">{stepLabels[step - 1]}</span>
-        </div>
-        <div className="text-muted-foreground">{Math.round(progress)}% Complete</div>
-      </div>
-      <div className="h-1.5 bg-surface rounded-full overflow-hidden mb-8">
-        <div
-          className="h-full bg-[image:var(--gradient-primary)] transition-all"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-
-      <div className="grid lg:grid-cols-[1fr,320px] gap-6">
-        <div className="rounded-2xl border border-border/60 bg-card p-6 md:p-8">
-          {step === 1 && (
-            <>
-              <h2 className="font-display text-2xl font-bold">Let&apos;s start with the basics</h2>
-              <p className="text-sm text-muted-foreground mt-2">
-                Describe your project requirements clearly to attract the most qualified developers
-                across Africa.
-              </p>
-              <div className="mt-6 space-y-5">
-                <div>
-                  <Label className="flex items-center gap-1.5">
-                    Job Title <BadgeCheck className="h-3.5 w-3.5 text-primary" />
-                  </Label>
-                  <Input
-                    className="mt-1.5"
-                    placeholder="e.g., Senior Full Stack Engineer for Fintech Dashboard"
-                    value={data.title}
-                    onChange={(e) => setData({ ...data, title: e.target.value })}
-                  />
-                  <div className="text-xs text-muted-foreground mt-1.5">
-                    Include key technologies and seniority level to improve search visibility.
-                  </div>
-                </div>
-                <div>
-                  <Label>Project Category</Label>
-                  <div className="grid sm:grid-cols-3 gap-3 mt-1.5">
-                    {categories.map((c) => {
-                      const Icon = c.icon;
-                      const active = data.category === c.id;
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => setData({ ...data, category: c.id })}
-                          className={`rounded-xl border p-4 text-sm transition-all ${active ? "border-primary bg-primary/10 text-primary" : "border-border bg-surface/40 hover:border-primary/40"}`}
-                        >
-                          <Icon className="h-5 w-5 mx-auto mb-2" />
-                          <div className="font-medium">{c.label}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div>
-                  <Label>Project Description</Label>
-                  <Textarea
-                    rows={6}
-                    className="mt-1.5"
-                    placeholder="Describe the scope, technical requirements, and deliverable expectations…"
-                    value={data.description}
-                    onChange={(e) => setData({ ...data, description: e.target.value })}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <h2 className="font-display text-2xl font-bold">What skills are needed?</h2>
-              <p className="text-sm text-muted-foreground mt-2">
-                Search and select the technical stack for your project. Be specific to attract the
-                right talent.
-              </p>
-              <div className="mt-6">
-                <Label>Search Skills</Label>
-                <Input
-                  className="mt-1.5"
-                  placeholder="e.g. React, Python, Solidity… (press Enter)"
-                  value={data.skillInput}
-                  onChange={(e) => setData({ ...data, skillInput: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addSkill(data.skillInput);
-                    }
-                  }}
-                />
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {data.skills.map((s) => (
-                    <span
-                      key={s}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 text-primary px-3 py-1 text-sm"
-                    >
-                      {s}
-                      <button onClick={() => removeSkill(s)}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                {(suggestedSkills[data.category] ?? []).length > 0 && (
-                  <div className="mt-4 text-xs text-muted-foreground">
-                    Suggested:
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {suggestedSkills[data.category]
-                        .filter((s) => !data.skills.includes(s))
-                        .map((s) => (
-                          <button
-                            key={s}
-                            onClick={() => addSkill(s)}
-                            className="rounded-full border border-border/60 px-2.5 py-1 text-xs hover:border-primary/40 hover:text-primary"
-                          >
-                            + {s}
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="mt-8">
-                <Label>Required Experience Level</Label>
-                <div className="grid sm:grid-cols-3 gap-3 mt-1.5">
-                  {experienceLevelOptions.map((l) => {
-                    const active = data.level === l.id;
-                    return (
-                      <button
-                        key={l.id}
-                        type="button"
-                        onClick={() => setData({ ...data, level: l.id as typeof data.level })}
-                        className={`text-left rounded-xl border p-4 transition-all ${active ? "border-primary bg-primary/10" : "border-border bg-surface/40 hover:border-primary/40"}`}
-                      >
-                        <div className="font-display font-semibold">{l.title}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{l.desc}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <h2 className="font-display text-2xl font-bold">Budget & Milestones</h2>
-              <p className="text-sm text-muted-foreground mt-2">
-                Define the total scope. Break the work into manageable payments released only when
-                milestones are approved.
-              </p>
-
-              <div className="mt-6 rounded-xl border border-border/60 bg-surface/40 p-5">
-                <Label>Total Project Budget (USD)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  className="mt-1.5 text-lg"
-                  placeholder="4500.00"
-                  value={data.budget}
-                  onChange={(e) => setData({ ...data, budget: e.target.value })}
-                />
-                <Input
-                  className="mt-3"
-                  placeholder="Estimated duration (e.g. 4–6 weeks)"
-                  value={data.duration}
-                  onChange={(e) => setData({ ...data, duration: e.target.value })}
-                />
-              </div>
-
-              <div className="mt-6">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-display font-semibold">Milestone Breakdown</h3>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={addMilestone}
-                    className="text-primary"
-                  >
-                    <Plus className="h-4 w-4 mr-1" /> Add Milestone
-                  </Button>
-                </div>
-                <div className="space-y-3">
-                  {data.milestones.map((m, i) => (
-                    <div
-                      key={i}
-                      className="rounded-xl border border-border/60 p-4 grid grid-cols-1 md:grid-cols-[1.5fr,1fr,1fr,auto] gap-3 items-end"
-                    >
-                      <div>
-                        <Label className="text-xs">Milestone {i + 1}</Label>
-                        <Input
-                          className="mt-1"
-                          placeholder="UI/UX Design & Prototype"
-                          value={m.title}
-                          onChange={(e) => updateMilestone(i, "title", e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Amount ($)</Label>
-                        <Input
-                          className="mt-1"
-                          type="number"
-                          min="0"
-                          placeholder="1500"
-                          value={m.amount}
-                          onChange={(e) => updateMilestone(i, "amount", e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Estimated Date</Label>
-                        <Input
-                          className="mt-1"
-                          type="date"
-                          value={m.due}
-                          onChange={(e) => updateMilestone(i, "due", e.target.value)}
-                        />
-                      </div>
-                      <button
-                        onClick={() => removeMilestone(i)}
-                        className="h-9 w-9 rounded-md border border-border/60 hover:border-destructive/60 hover:text-destructive flex items-center justify-center"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {step === 4 && (
-            <>
-              <h2 className="font-display text-2xl font-bold">Final Review</h2>
-              <p className="text-sm text-muted-foreground mt-2">
-                Make sure everything looks good before funding the escrow.
-              </p>
-              <div className="mt-6 rounded-xl border border-border/60 p-5">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Project Title
-                </div>
-                <div className="font-display text-xl font-bold mt-1">{data.title}</div>
-                <div className="grid sm:grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <div className="text-xs text-muted-foreground uppercase">Category</div>
-                    <div className="capitalize">
-                      {categories.find((c) => c.id === data.category)?.label}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground uppercase">Experience</div>
-                    <div>{experienceLevelMap[data.level] ?? data.level}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground uppercase">Duration</div>
-                    <div>{data.duration || "Flexible"}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground uppercase">Skills</div>
-                    <div>{data.skills.join(", ") || "—"}</div>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="text-xs text-muted-foreground uppercase">Description</div>
-                  <p className="text-sm mt-1 whitespace-pre-wrap">{data.description}</p>
-                </div>
-              </div>
-              <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-5 flex items-start gap-3">
-                <ShieldCheck className="h-5 w-5 text-primary mt-0.5" />
-                <div>
-                  <div className="font-display font-semibold">Secure Escrow Protection</div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Funds are held in a multi-signature wallet. Payment is released only when you
-                    approve each milestone. Mediation team available 24/7.
-                  </p>
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="flex justify-between mt-8 pt-6 border-t border-border/40">
-            <Button variant="ghost" disabled={step === 1} onClick={() => setStep(step - 1)}>
-              <ArrowLeft className="h-4 w-4 mr-2" /> Back
-            </Button>
-            {step < 4 ? (
-              <Button
-                disabled={!canNext}
-                onClick={() => setStep(step + 1)}
-                className="bg-[image:var(--gradient-primary)] text-primary-foreground"
+    <>
+      <TopBar title="Post a Job" subtitle="Find your developer in hours, not weeks" />
+      {/* Stepper */}
+      <div className="mx-auto mb-8 flex max-w-[640px] items-center justify-between">
+        {STEPS.map((label, i) => (
+          <div key={label} className="flex flex-1 items-center">
+            <div className="flex flex-col items-center">
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-full font-mono text-sm font-bold transition-all"
+                style={{
+                  background: i < step ? "var(--gold)" : "transparent",
+                  border: i === step ? "2px solid var(--gold)" : i < step ? "none" : "1px solid var(--border)",
+                  color: i < step ? "var(--background)" : i === step ? "var(--gold)" : "var(--text-muted)",
+                }}
               >
-                Continue <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            ) : (
-              <Button
-                disabled={busy}
-                onClick={submit}
-                className="bg-[image:var(--gradient-primary)] text-primary-foreground"
+                {i < step ? <Check className="h-4 w-4" strokeWidth={3} /> : i + 1}
+              </div>
+              <div
+                className="mt-2 text-[10px] font-medium uppercase tracking-wider"
+                style={{ color: i === step ? "var(--gold)" : "var(--text-muted)" }}
               >
-                {busy ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing Payment…
-                  </>
-                ) : (
-                  <>
-                    Fund & Post Job <ArrowRight className="h-4 w-4 ml-2" />
-                  </>
-                )}
-              </Button>
+                {label}
+              </div>
+            </div>
+            {i < STEPS.length - 1 && (
+              <div
+                className="mx-2 mb-5 h-px flex-1"
+                style={{ background: i < step ? "var(--gold)" : "var(--border)" }}
+              />
             )}
           </div>
-        </div>
-
-        {/* Side panel */}
-        <aside className="space-y-4">
-          <div className="rounded-2xl border border-accent/30 bg-accent/10 p-5">
-            <div className="flex items-center gap-2 text-accent">
-              <Lightbulb className="h-4 w-4" />{" "}
-              <div className="font-display font-semibold">Expert Tip</div>
-            </div>
-            <p className="text-sm mt-2 text-foreground/90">
-              Projects with a detailed technical breakdown receive 40% more high-quality proposals
-              in the first 24 hours.
-            </p>
-          </div>
-          {step === 4 && (
-            <div className="rounded-2xl border border-border/60 bg-card p-5">
-              <div className="font-display font-semibold mb-3 flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-primary" /> Payment Summary
-              </div>
-              <div className="text-sm space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Job Budget</span>
-                  <span>${(Number(data.budget) || totalMilestones).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Escrow Service Fee (7%)</span>
-                  <span>${((Number(data.budget) || totalMilestones) * 0.07).toFixed(2)}</span>
-                </div>
-                <div className="border-t border-border/40 pt-2 flex justify-between font-display font-bold text-base">
-                  <span>Total to Fund</span>
-                  <span className="text-primary">
-                    ${((Number(data.budget) || totalMilestones) * 1.07).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-              <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border/30">
-                💳 Powered by Paystack • Secure card payments accepted globally
-              </div>
-            </div>
-          )}
-          <div className="rounded-2xl border border-border/60 bg-card p-5">
-            <div className="font-display font-semibold flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" /> Verified Marketplace
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Top 5% African tech talent. All developers undergo technical vetting before joining.
-            </p>
-          </div>
-        </aside>
+        ))}
       </div>
+
+      <div
+        className="mx-auto max-w-[640px] rounded-[20px] border bg-card p-8"
+        style={{ borderColor: "var(--border)" }}
+      >
+        {step === 0 && (
+          <StepType
+            category={category}
+            setCategory={setCategory}
+            projectType={projectType}
+            setProjectType={setProjectType}
+          />
+        )}
+        {step === 1 && (
+          <StepDetails
+            title={title} setTitle={setTitle}
+            description={description} setDescription={setDescription}
+            timeline={timeline} setTimeline={setTimeline}
+            experience={experience} setExperience={setExperience}
+          />
+        )}
+        {step === 2 && <StepSkills skills={skills} setSkills={setSkills} />}
+        {step === 3 && (
+          <StepBudget
+            budgetType={budgetType} setBudgetType={setBudgetType}
+            budget={budget} setBudget={setBudget}
+          />
+        )}
+        {step === 4 && (
+          <StepReview
+            category={category} title={title} timeline={timeline}
+            experience={experience} skills={skills} budget={budget}
+            featured={featured} setFeatured={setFeatured}
+            budgetType={budgetType}
+          />
+        )}
+      </div>
+
+      {/* Nav */}
+      <div className="mx-auto mt-5 flex max-w-[640px] items-center justify-between">
+        {step > 0 ? (
+          <button
+            onClick={() => setStep((s) => s - 1)}
+            className="flex h-12 items-center gap-2 rounded-xl border bg-[var(--card-hover)] px-5 text-sm font-semibold"
+            style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
+          >
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+        ) : <div />}
+        {step < STEPS.length - 1 ? (
+          <button
+            onClick={() => setStep((s) => s + 1)}
+            className="flex h-12 items-center gap-2 rounded-xl px-6 font-display text-[15px] font-semibold transition-transform hover:scale-[1.02] gold-gradient shadow-gold"
+            style={{ color: "var(--background)" }}
+          >
+            Next: {STEPS[step + 1]} <ArrowRight className="h-4 w-4" />
+          </button>
+        ) : (
+          <button
+            onClick={() => setPosted(true)}
+            className="flex h-14 items-center gap-2 rounded-xl px-8 font-display text-[18px] font-bold transition-transform hover:scale-[1.01] gold-gradient shadow-gold-lg"
+            style={{ color: "var(--background)" }}
+          >
+            Post Job Now 🚀
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+function StepType({
+  category, setCategory, projectType, setProjectType,
+}: {
+  category: string | null; setCategory: (s: string) => void;
+  projectType: string; setProjectType: (s: string) => void;
+}) {
+  return (
+    <>
+      <h2 className="font-display text-[22px] font-bold text-foreground">What type of work do you need?</h2>
+      <p className="mb-6 mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+        Select the category that best fits your project.
+      </p>
+      <div className="grid grid-cols-3 gap-3">
+        {CATEGORIES.map((c) => {
+          const sel = category === c.id;
+          return (
+            <button
+              key={c.id}
+              onClick={() => setCategory(c.id)}
+              className="relative rounded-xl border p-4 text-left transition-all"
+              style={{
+                borderColor: sel ? "var(--gold)" : "var(--border)",
+                borderWidth: sel ? 2 : 1,
+                background: sel ? "rgba(245,166,35,0.08)" : "var(--card-hover)",
+              }}
+            >
+              <div
+                className="mb-2 flex h-10 w-10 items-center justify-center rounded-full text-lg"
+                style={{ background: c.color }}
+              >
+                {c.icon}
+              </div>
+              <div className="text-sm font-semibold text-foreground">{c.label}</div>
+              <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>{c.desc}</div>
+              {sel && (
+                <div
+                  className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full"
+                  style={{ background: "var(--gold)", color: "var(--background)" }}
+                >
+                  <Check className="h-3 w-3" strokeWidth={3} />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        className="mb-2 mt-6 text-[11px] font-medium uppercase tracking-[0.08em]"
+        style={{ color: "var(--text-muted)" }}
+      >
+        Project Type
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {[
+          { id: "one-time", label: "One-time Project" },
+          { id: "ongoing", label: "Ongoing Work" },
+          { id: "fulltime", label: "Full-time Hire" },
+        ].map((p) => {
+          const sel = projectType === p.id;
+          return (
+            <button
+              key={p.id}
+              onClick={() => setProjectType(p.id)}
+              className="h-10 rounded-full border px-4 text-[13px] font-semibold transition-colors"
+              style={{
+                background: sel ? "var(--gold)" : "var(--card-hover)",
+                color: sel ? "var(--background)" : "var(--text-secondary)",
+                borderColor: sel ? "var(--gold)" : "var(--border)",
+              }}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function StepDetails({
+  title, setTitle, description, setDescription,
+  timeline, setTimeline, experience, setExperience,
+}: any) {
+  return (
+    <>
+      <h2 className="mb-6 font-display text-[22px] font-bold text-foreground">Describe your project</h2>
+
+      <Label>Job Title *</Label>
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="e.g. React Developer for Fintech Dashboard"
+        className="h-14 w-full rounded-xl border bg-[var(--card-hover)] px-4 text-[16px] text-foreground outline-none transition-all placeholder:text-[var(--text-muted)] focus:border-2 focus:border-[var(--gold)]"
+        style={{ borderColor: "var(--border)" }}
+        maxLength={100}
+      />
+      <div className="mb-5 mt-1 text-right text-[11px]" style={{ color: "var(--text-muted)" }}>
+        {title.length}/100
+      </div>
+
+      <Label>Description *</Label>
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Describe what you need built, technical requirements, and what success looks like..."
+        className="h-40 w-full resize-none rounded-xl border bg-[var(--card-hover)] p-4 text-[15px] text-foreground outline-none transition-all placeholder:text-[var(--text-muted)] focus:border-2 focus:border-[var(--gold)]"
+        style={{ borderColor: "var(--border)" }}
+      />
+      <div
+        className="mt-2 rounded-lg border px-4 py-2.5 text-[12px]"
+        style={{
+          background: "rgba(245,166,35,0.08)",
+          borderColor: "rgba(245,166,35,0.20)",
+          color: "var(--gold)",
+        }}
+      >
+        💡 Detailed descriptions get 4x more quality proposals
+      </div>
+
+      <Label className="mt-6">Project Timeline *</Label>
+      <div className="grid grid-cols-2 gap-2">
+        {[
+          { id: "1w", label: "< 1 Week", sub: "Quick project" },
+          { id: "2w", label: "1–2 Weeks", sub: "Short sprint" },
+          { id: "1m", label: "1 Month", sub: "Medium build" },
+          { id: "3m", label: "3+ Months", sub: "Long-term" },
+        ].map((t) => {
+          const sel = timeline === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTimeline(t.id)}
+              className="rounded-[10px] border p-3 text-left transition-all"
+              style={{
+                background: sel ? "rgba(245,166,35,0.08)" : "var(--card-hover)",
+                borderColor: sel ? "var(--gold)" : "var(--border)",
+                borderWidth: sel ? 2 : 1,
+              }}
+            >
+              <div className="text-sm font-semibold text-foreground">{t.label}</div>
+              <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>{t.sub}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      <Label className="mt-6">Experience Level *</Label>
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { id: "junior", label: "Junior", sub: "1–3 yrs · Basic tasks" },
+          { id: "mid", label: "Mid-level", sub: "3–5 yrs · Solid work" },
+          { id: "senior", label: "Senior/Expert", sub: "5+ yrs · Complex builds" },
+        ].map((e) => {
+          const sel = experience === e.id;
+          return (
+            <button
+              key={e.id}
+              onClick={() => setExperience(e.id)}
+              className="rounded-[10px] border p-4 text-center transition-all"
+              style={{
+                background: sel ? "rgba(245,166,35,0.08)" : "var(--card-hover)",
+                borderColor: sel ? "var(--gold)" : "var(--border)",
+                borderWidth: sel ? 2 : 1,
+              }}
+            >
+              <div className="text-sm font-semibold text-foreground">{e.label}</div>
+              <div className="mt-1 text-[11px]" style={{ color: "var(--text-muted)" }}>{e.sub}</div>
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function StepSkills({ skills, setSkills }: { skills: string[]; setSkills: (s: string[]) => void }) {
+  const toggle = (s: string) =>
+    setSkills(skills.includes(s) ? skills.filter((x) => x !== s) : [...skills, s]);
+
+  return (
+    <>
+      <h2 className="mb-6 font-display text-[22px] font-bold text-foreground">What skills do you need?</h2>
+
+      <input
+        placeholder="Search skills..."
+        className="h-14 w-full rounded-xl border bg-[var(--card-hover)] px-4 text-[15px] text-foreground outline-none placeholder:text-[var(--text-muted)] focus:border-2 focus:border-[var(--gold)]"
+        style={{ borderColor: "var(--border)" }}
+      />
+
+      {skills.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {skills.map((s) => (
+            <button
+              key={s}
+              onClick={() => toggle(s)}
+              className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium"
+              style={{
+                background: "var(--card-hover)",
+                borderColor: "var(--gold)",
+                color: "var(--gold)",
+              }}
+            >
+              {s} <span className="text-base leading-none">✕</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div
+        className="mb-3 mt-6 text-[11px] font-medium uppercase tracking-[0.08em]"
+        style={{ color: "var(--text-muted)" }}
+      >
+        Popular Skills
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {POPULAR_SKILLS.map((s) => {
+          const sel = skills.includes(s);
+          return (
+            <button
+              key={s}
+              onClick={() => toggle(s)}
+              className="rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-colors"
+              style={{
+                background: sel ? "rgba(245,166,35,0.10)" : "var(--card-hover)",
+                borderColor: sel ? "var(--gold)" : "var(--border)",
+                color: sel ? "var(--gold)" : "var(--text-secondary)",
+              }}
+            >
+              {s}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function StepBudget({
+  budgetType, setBudgetType, budget, setBudget,
+}: {
+  budgetType: "fixed" | "hourly"; setBudgetType: (b: "fixed" | "hourly") => void;
+  budget: string; setBudget: (b: string) => void;
+}) {
+  const num = parseFloat(budget) || 0;
+  return (
+    <>
+      <h2 className="font-display text-[22px] font-bold text-foreground">Set your budget</h2>
+      <p className="mb-6 mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+        You only pay when you approve the work.
+      </p>
+
+      <div className="mb-6 flex justify-center gap-3">
+        {(["fixed", "hourly"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setBudgetType(t)}
+            className="h-11 rounded-full border px-6 text-sm font-semibold transition-colors"
+            style={{
+              background: budgetType === t ? "var(--gold)" : "var(--card-hover)",
+              color: budgetType === t ? "var(--background)" : "var(--text-secondary)",
+              borderColor: budgetType === t ? "var(--gold)" : "var(--border)",
+            }}
+          >
+            {t === "fixed" ? "Fixed Price" : "Hourly Rate"}
+          </button>
+        ))}
+      </div>
+
+      {budgetType === "fixed" ? (
+        <>
+          <Label>Estimated Budget (GHS)</Label>
+          <div className="relative">
+            <span
+              className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-lg"
+              style={{ color: "var(--text-muted)" }}
+            >
+              GHS
+            </span>
+            <input
+              type="number"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+              placeholder="0"
+              className="h-[72px] w-full rounded-xl border bg-[var(--card-hover)] pl-[72px] pr-4 font-mono text-3xl font-bold text-foreground outline-none focus:border-2 focus:border-[var(--gold)]"
+              style={{ borderColor: "var(--border)" }}
+            />
+          </div>
+          <div className="mt-2 font-mono text-sm" style={{ color: "var(--text-muted)" }}>
+            ≈ {fmtUSD(ghsToUsd(num))}
+          </div>
+
+          <div
+            className="mt-4 rounded-xl border p-4"
+            style={{
+              background: "rgba(245,166,35,0.06)",
+              borderColor: "rgba(245,166,35,0.15)",
+            }}
+          >
+            <div className="text-[13px] font-semibold" style={{ color: "var(--gold)" }}>
+              💡 Similar projects on DevPay:
+            </div>
+            <div className="text-[13px]" style={{ color: "var(--text-secondary)" }}>
+              GHS 1,500 – 4,500 for similar work
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Min Rate (GHS/hr)</Label>
+            <input className="h-14 w-full rounded-xl border bg-[var(--card-hover)] px-4 text-foreground" style={{ borderColor: "var(--border)" }} type="number" />
+          </div>
+          <div>
+            <Label>Max Rate (GHS/hr)</Label>
+            <input className="h-14 w-full rounded-xl border bg-[var(--card-hover)] px-4 text-foreground" style={{ borderColor: "var(--border)" }} type="number" />
+          </div>
+        </div>
+      )}
+
+      <div
+        className="mt-6 rounded-[10px] p-4"
+        style={{ background: "var(--card-hover)", borderLeft: "3px solid var(--gold)" }}
+      >
+        <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-foreground">
+          <Lock className="h-4 w-4" style={{ color: "var(--gold)" }} /> How Your Payment is Protected:
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {["You fund escrow", "DevPay holds it safely", "Developer completes work", "You approve → Dev gets paid"].map((s, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span
+                className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold"
+                style={{ background: "var(--gold)", color: "var(--background)" }}
+              >
+                {i + 1}
+              </span>
+              <span className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{s}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 text-[13px]" style={{ color: "var(--success)" }}>
+          ✓ Your money is 100% refundable if work is not delivered
+        </div>
+      </div>
+    </>
+  );
+}
+
+function StepReview({
+  category, title, timeline, experience, skills, budget, featured, setFeatured, budgetType,
+}: any) {
+  return (
+    <>
+      <h2 className="mb-6 font-display text-[22px] font-bold text-foreground">Review your job post</h2>
+
+      {/* AI Reach */}
+      <div
+        className="mb-5 rounded-2xl border px-6 py-5 text-center"
+        style={{
+          background: "rgba(245,166,35,0.08)",
+          borderColor: "rgba(245,166,35,0.25)",
+        }}
+      >
+        <div className="text-[13px] font-semibold" style={{ color: "var(--gold)" }}>
+          🤖 AI Match Estimate
+        </div>
+        <div className="my-2 font-display text-5xl font-bold text-foreground">847</div>
+        <div className="text-sm" style={{ color: "var(--text-secondary)" }}>
+          matching developers on DevPay Africa
+        </div>
+        <div className="text-[12px]" style={{ color: "var(--text-muted)" }}>
+          Based on your skill requirements and budget
+        </div>
+      </div>
+
+      <div className="space-y-0 rounded-xl border p-2" style={{ borderColor: "var(--border)" }}>
+        {[
+          ["Job Type", category || "Not set"],
+          ["Title", title || "Untitled"],
+          ["Timeline", timeline || "Not set"],
+          ["Experience Level", experience || "Not set"],
+          ["Required Skills", skills.join(", ") || "None"],
+          ["Budget", budgetType === "fixed" ? `GHS ${budget || 0}` : "Hourly"],
+        ].map(([k, v]) => (
+          <div
+            key={k as string}
+            className="flex items-start justify-between px-3 py-2.5"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+          >
+            <span className="text-[13px]" style={{ color: "var(--text-muted)" }}>{k}</span>
+            <span className="max-w-[60%] truncate text-right text-[13px] text-foreground">{v}</span>
+          </div>
+        ))}
+      </div>
+
+      <div
+        className="mt-5 flex items-center justify-between rounded-xl border-2 border-dashed p-4"
+        style={{ borderColor: "var(--gold)" }}
+      >
+        <div>
+          <div className="text-sm font-semibold text-foreground">⭐ Feature this job for more visibility</div>
+          <div className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
+            Get 8x more developer views · Top of search results
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[13px]" style={{ color: "var(--gold)" }}>+ GHS 450/week</span>
+          <button
+            onClick={() => setFeatured(!featured)}
+            className="relative h-6 w-11 rounded-full transition-colors"
+            style={{ background: featured ? "var(--gold)" : "var(--border)" }}
+          >
+            <span
+              className="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform"
+              style={{ left: featured ? "calc(100% - 22px)" : "2px" }}
+            />
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SuccessOverlay() {
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background p-8 text-center">
+      <Sparkles className="mb-6 h-20 w-20 animate-float" style={{ color: "var(--gold)" }} />
+      <div className="font-display text-4xl font-bold text-foreground">🎉 Your Job is Live!</div>
+      <div className="mt-3 text-base" style={{ color: "var(--text-secondary)" }}>
+        847 developers have been notified.
+      </div>
+      <div className="mt-8 flex gap-3">
+        <a
+          href="/client/proposals"
+          className="flex h-12 items-center gap-2 rounded-xl px-6 font-display font-semibold gold-gradient shadow-gold"
+          style={{ color: "var(--background)" }}
+        >
+          View Proposals →
+        </a>
+        <a
+          href="/client/post-job"
+          className="flex h-12 items-center rounded-xl border px-6 font-semibold"
+          style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
+        >
+          Post Another Job
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function Label({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={`mb-1.5 text-[11px] font-medium uppercase tracking-[0.08em] ${className || ""}`}
+      style={{ color: "var(--text-muted)" }}
+    >
+      {children}
     </div>
   );
 }

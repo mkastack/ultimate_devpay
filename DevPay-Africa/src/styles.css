@@ -40,6 +40,12 @@
   --color-ring: var(--ring);
   --color-surface: var(--surface);
   --color-surface-elevated: var(--surface-elevated);
+  --color-surface-hover: var(--surface-hover);
+  --color-cyan-brand: var(--cyan-brand);
+  --color-gold-brand: var(--gold-brand);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-error: var(--error);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -59,6 +65,13 @@
 
   --surface: oklch(0.22 0.045 255);
   --surface-elevated: oklch(0.26 0.05 255);
+  --surface-hover: oklch(0.293 0.057 258);
+
+  --cyan-brand: oklch(0.762 0.13 178);
+  --gold-brand: oklch(0.769 0.158 65);
+  --text-secondary: oklch(0.708 0.046 255);
+  --text-muted: oklch(0.491 0.043 258);
+  --error: oklch(0.672 0.218 17);
 
   --card: oklch(0.22 0.045 255);
   --card-foreground: oklch(0.97 0.01 240);
@@ -118,6 +131,84 @@
   color-scheme: dark;
 }
 
+.light {
+  --background: oklch(0.985 0.003 247);
+  --foreground: oklch(0.205 0.043 252);
+  --surface: oklch(1 0 0);
+  --surface-elevated: oklch(0.965 0.008 252);
+  --surface-hover: oklch(0.965 0.008 252);
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --muted: var(--surface-hover);
+  --muted-foreground: oklch(0.45 0.04 256);
+  --text-secondary: oklch(0.40 0.04 256);
+  --text-muted: oklch(0.55 0.03 258);
+  --border: oklch(0.91 0.015 256);
+  --input: var(--border);
+  --sidebar: var(--surface);
+  --sidebar-accent: var(--surface-hover);
+  --sidebar-border: var(--border);
+}
+
+.light .force-white,
+.light .force-white .text-white,
+.light .force-white.text-white {
+  color: oklch(1 0 0) !important;
+}
+.light .text-white {
+  color: var(--foreground) !important;
+}
+.light [class*="bg-[color:var(--cyan-brand)]"] {
+  color: oklch(0.205 0.043 252) !important;
+}
+
+/* Hirer dashboard tokens */
+:root {
+  --card-hover: oklch(0.293 0.057 258);
+  --gold: #f5a623;
+  --gold-deep: #e65100;
+  --cyan: #00c6a7;
+}
+
+html.light {
+  --card-hover: oklch(0.965 0.008 252);
+  --gold: #e0911a;
+  --gold-deep: #b85c00;
+  --cyan: #0d9488;
+}
+
+.gold-gradient {
+  background: linear-gradient(135deg, #f5a623, #e65100);
+}
+
+.shadow-gold {
+  box-shadow: 0 8px 32px rgba(245, 166, 35, 0.25);
+}
+
+.shadow-gold-lg {
+  box-shadow: 0 16px 48px rgba(245, 166, 35, 0.5);
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-pulse-border {
+  animation: pulse-border 2s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: rgba(16, 185, 129, 0.4); }
+  50% { border-color: rgba(16, 185, 129, 1); }
+}
+
 @layer base {
   html {
     color-scheme: dark;
@@ -162,4 +253,12 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }

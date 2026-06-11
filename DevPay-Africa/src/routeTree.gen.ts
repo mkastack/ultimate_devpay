@@ -23,15 +23,25 @@ import { Route as DeveloperIndexRouteImport } from './routes/developer.index'
 import { Route as ClientIndexRouteImport } from './routes/client.index'
 import { Route as TalentUserIdRouteImport } from './routes/talent.$userId'
 import { Route as JobsJobIdRouteImport } from './routes/jobs.$jobId'
+import { Route as DeveloperWalletRouteImport } from './routes/developer.wallet'
+import { Route as DeveloperSettingsRouteImport } from './routes/developer.settings'
 import { Route as DeveloperProposalsRouteImport } from './routes/developer.proposals'
-import { Route as DeveloperActiveJobsRouteImport } from './routes/developer.active-jobs'
+import { Route as DeveloperProfileRouteImport } from './routes/developer.profile'
+import { Route as DeveloperPaymentMethodsRouteImport } from './routes/developer.payment-methods'
+import { Route as DeveloperMessagesRouteImport } from './routes/developer.messages'
+import { Route as DeveloperJobsForYouRouteImport } from './routes/developer.jobs-for-you'
+import { Route as DeveloperJobsRouteImport } from './routes/developer.jobs'
+import { Route as DeveloperContractsRouteImport } from './routes/developer.contracts'
 import { Route as DebugImpersonateRouteImport } from './routes/debug/impersonate'
 import { Route as DebugAuthStateRouteImport } from './routes/debug/auth-state'
-import { Route as ClientTalentRouteImport } from './routes/client.talent'
+import { Route as ClientSettingsRouteImport } from './routes/client.settings'
+import { Route as ClientProposalsRouteImport } from './routes/client.proposals'
 import { Route as ClientPostJobRouteImport } from './routes/client.post-job'
-import { Route as ClientPayoutsRouteImport } from './routes/client.payouts'
-import { Route as ClientActiveContractsRouteImport } from './routes/client.active-contracts'
-import { Route as ApiInngestRouteImport } from './routes/api/inngest'
+import { Route as ClientPaymentsRouteImport } from './routes/client.payments'
+import { Route as ClientMessagesRouteImport } from './routes/client.messages'
+import { Route as ClientJobsRouteImport } from './routes/client.jobs'
+import { Route as ClientDevelopersRouteImport } from './routes/client.developers'
+import { Route as ClientContractsRouteImport } from './routes/client.contracts'
 import { Route as ClientProjectsJobIdRouteImport } from './routes/client.projects.$jobId'
 import { Route as ClientDisputesNewRouteImport } from './routes/client.disputes.new'
 
@@ -105,14 +115,49 @@ const JobsJobIdRoute = JobsJobIdRouteImport.update({
   path: '/$jobId',
   getParentRoute: () => JobsRoute,
 } as any)
+const DeveloperWalletRoute = DeveloperWalletRouteImport.update({
+  id: '/wallet',
+  path: '/wallet',
+  getParentRoute: () => DeveloperRoute,
+} as any)
+const DeveloperSettingsRoute = DeveloperSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => DeveloperRoute,
+} as any)
 const DeveloperProposalsRoute = DeveloperProposalsRouteImport.update({
   id: '/proposals',
   path: '/proposals',
   getParentRoute: () => DeveloperRoute,
 } as any)
-const DeveloperActiveJobsRoute = DeveloperActiveJobsRouteImport.update({
-  id: '/active-jobs',
-  path: '/active-jobs',
+const DeveloperProfileRoute = DeveloperProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => DeveloperRoute,
+} as any)
+const DeveloperPaymentMethodsRoute = DeveloperPaymentMethodsRouteImport.update({
+  id: '/payment-methods',
+  path: '/payment-methods',
+  getParentRoute: () => DeveloperRoute,
+} as any)
+const DeveloperMessagesRoute = DeveloperMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => DeveloperRoute,
+} as any)
+const DeveloperJobsForYouRoute = DeveloperJobsForYouRouteImport.update({
+  id: '/jobs-for-you',
+  path: '/jobs-for-you',
+  getParentRoute: () => DeveloperRoute,
+} as any)
+const DeveloperJobsRoute = DeveloperJobsRouteImport.update({
+  id: '/jobs',
+  path: '/jobs',
+  getParentRoute: () => DeveloperRoute,
+} as any)
+const DeveloperContractsRoute = DeveloperContractsRouteImport.update({
+  id: '/contracts',
+  path: '/contracts',
   getParentRoute: () => DeveloperRoute,
 } as any)
 const DebugImpersonateRoute = DebugImpersonateRouteImport.update({
@@ -125,9 +170,14 @@ const DebugAuthStateRoute = DebugAuthStateRouteImport.update({
   path: '/debug/auth-state',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ClientTalentRoute = ClientTalentRouteImport.update({
-  id: '/talent',
-  path: '/talent',
+const ClientSettingsRoute = ClientSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => ClientRoute,
+} as any)
+const ClientProposalsRoute = ClientProposalsRouteImport.update({
+  id: '/proposals',
+  path: '/proposals',
   getParentRoute: () => ClientRoute,
 } as any)
 const ClientPostJobRoute = ClientPostJobRouteImport.update({
@@ -135,20 +185,30 @@ const ClientPostJobRoute = ClientPostJobRouteImport.update({
   path: '/post-job',
   getParentRoute: () => ClientRoute,
 } as any)
-const ClientPayoutsRoute = ClientPayoutsRouteImport.update({
-  id: '/payouts',
-  path: '/payouts',
+const ClientPaymentsRoute = ClientPaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
   getParentRoute: () => ClientRoute,
 } as any)
-const ClientActiveContractsRoute = ClientActiveContractsRouteImport.update({
-  id: '/active-contracts',
-  path: '/active-contracts',
+const ClientMessagesRoute = ClientMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
   getParentRoute: () => ClientRoute,
 } as any)
-const ApiInngestRoute = ApiInngestRouteImport.update({
-  id: '/api/inngest',
-  path: '/api/inngest',
-  getParentRoute: () => rootRouteImport,
+const ClientJobsRoute = ClientJobsRouteImport.update({
+  id: '/jobs',
+  path: '/jobs',
+  getParentRoute: () => ClientRoute,
+} as any)
+const ClientDevelopersRoute = ClientDevelopersRouteImport.update({
+  id: '/developers',
+  path: '/developers',
+  getParentRoute: () => ClientRoute,
+} as any)
+const ClientContractsRoute = ClientContractsRouteImport.update({
+  id: '/contracts',
+  path: '/contracts',
+  getParentRoute: () => ClientRoute,
 } as any)
 const ClientProjectsJobIdRoute = ClientProjectsJobIdRouteImport.update({
   id: '/projects/$jobId',
@@ -172,15 +232,25 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/signup': typeof SignupRoute
   '/wallet': typeof WalletRoute
-  '/api/inngest': typeof ApiInngestRoute
-  '/client/active-contracts': typeof ClientActiveContractsRoute
-  '/client/payouts': typeof ClientPayoutsRoute
+  '/client/contracts': typeof ClientContractsRoute
+  '/client/developers': typeof ClientDevelopersRoute
+  '/client/jobs': typeof ClientJobsRoute
+  '/client/messages': typeof ClientMessagesRoute
+  '/client/payments': typeof ClientPaymentsRoute
   '/client/post-job': typeof ClientPostJobRoute
-  '/client/talent': typeof ClientTalentRoute
+  '/client/proposals': typeof ClientProposalsRoute
+  '/client/settings': typeof ClientSettingsRoute
   '/debug/auth-state': typeof DebugAuthStateRoute
   '/debug/impersonate': typeof DebugImpersonateRoute
-  '/developer/active-jobs': typeof DeveloperActiveJobsRoute
+  '/developer/contracts': typeof DeveloperContractsRoute
+  '/developer/jobs': typeof DeveloperJobsRoute
+  '/developer/jobs-for-you': typeof DeveloperJobsForYouRoute
+  '/developer/messages': typeof DeveloperMessagesRoute
+  '/developer/payment-methods': typeof DeveloperPaymentMethodsRoute
+  '/developer/profile': typeof DeveloperProfileRoute
   '/developer/proposals': typeof DeveloperProposalsRoute
+  '/developer/settings': typeof DeveloperSettingsRoute
+  '/developer/wallet': typeof DeveloperWalletRoute
   '/jobs/$jobId': typeof JobsJobIdRoute
   '/talent/$userId': typeof TalentUserIdRoute
   '/client/': typeof ClientIndexRoute
@@ -197,15 +267,25 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/signup': typeof SignupRoute
   '/wallet': typeof WalletRoute
-  '/api/inngest': typeof ApiInngestRoute
-  '/client/active-contracts': typeof ClientActiveContractsRoute
-  '/client/payouts': typeof ClientPayoutsRoute
+  '/client/contracts': typeof ClientContractsRoute
+  '/client/developers': typeof ClientDevelopersRoute
+  '/client/jobs': typeof ClientJobsRoute
+  '/client/messages': typeof ClientMessagesRoute
+  '/client/payments': typeof ClientPaymentsRoute
   '/client/post-job': typeof ClientPostJobRoute
-  '/client/talent': typeof ClientTalentRoute
+  '/client/proposals': typeof ClientProposalsRoute
+  '/client/settings': typeof ClientSettingsRoute
   '/debug/auth-state': typeof DebugAuthStateRoute
   '/debug/impersonate': typeof DebugImpersonateRoute
-  '/developer/active-jobs': typeof DeveloperActiveJobsRoute
+  '/developer/contracts': typeof DeveloperContractsRoute
+  '/developer/jobs': typeof DeveloperJobsRoute
+  '/developer/jobs-for-you': typeof DeveloperJobsForYouRoute
+  '/developer/messages': typeof DeveloperMessagesRoute
+  '/developer/payment-methods': typeof DeveloperPaymentMethodsRoute
+  '/developer/profile': typeof DeveloperProfileRoute
   '/developer/proposals': typeof DeveloperProposalsRoute
+  '/developer/settings': typeof DeveloperSettingsRoute
+  '/developer/wallet': typeof DeveloperWalletRoute
   '/jobs/$jobId': typeof JobsJobIdRoute
   '/talent/$userId': typeof TalentUserIdRoute
   '/client': typeof ClientIndexRoute
@@ -225,15 +305,25 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/signup': typeof SignupRoute
   '/wallet': typeof WalletRoute
-  '/api/inngest': typeof ApiInngestRoute
-  '/client/active-contracts': typeof ClientActiveContractsRoute
-  '/client/payouts': typeof ClientPayoutsRoute
+  '/client/contracts': typeof ClientContractsRoute
+  '/client/developers': typeof ClientDevelopersRoute
+  '/client/jobs': typeof ClientJobsRoute
+  '/client/messages': typeof ClientMessagesRoute
+  '/client/payments': typeof ClientPaymentsRoute
   '/client/post-job': typeof ClientPostJobRoute
-  '/client/talent': typeof ClientTalentRoute
+  '/client/proposals': typeof ClientProposalsRoute
+  '/client/settings': typeof ClientSettingsRoute
   '/debug/auth-state': typeof DebugAuthStateRoute
   '/debug/impersonate': typeof DebugImpersonateRoute
-  '/developer/active-jobs': typeof DeveloperActiveJobsRoute
+  '/developer/contracts': typeof DeveloperContractsRoute
+  '/developer/jobs': typeof DeveloperJobsRoute
+  '/developer/jobs-for-you': typeof DeveloperJobsForYouRoute
+  '/developer/messages': typeof DeveloperMessagesRoute
+  '/developer/payment-methods': typeof DeveloperPaymentMethodsRoute
+  '/developer/profile': typeof DeveloperProfileRoute
   '/developer/proposals': typeof DeveloperProposalsRoute
+  '/developer/settings': typeof DeveloperSettingsRoute
+  '/developer/wallet': typeof DeveloperWalletRoute
   '/jobs/$jobId': typeof JobsJobIdRoute
   '/talent/$userId': typeof TalentUserIdRoute
   '/client/': typeof ClientIndexRoute
@@ -254,15 +344,25 @@ export interface FileRouteTypes {
     | '/profile'
     | '/signup'
     | '/wallet'
-    | '/api/inngest'
-    | '/client/active-contracts'
-    | '/client/payouts'
+    | '/client/contracts'
+    | '/client/developers'
+    | '/client/jobs'
+    | '/client/messages'
+    | '/client/payments'
     | '/client/post-job'
-    | '/client/talent'
+    | '/client/proposals'
+    | '/client/settings'
     | '/debug/auth-state'
     | '/debug/impersonate'
-    | '/developer/active-jobs'
+    | '/developer/contracts'
+    | '/developer/jobs'
+    | '/developer/jobs-for-you'
+    | '/developer/messages'
+    | '/developer/payment-methods'
+    | '/developer/profile'
     | '/developer/proposals'
+    | '/developer/settings'
+    | '/developer/wallet'
     | '/jobs/$jobId'
     | '/talent/$userId'
     | '/client/'
@@ -279,15 +379,25 @@ export interface FileRouteTypes {
     | '/profile'
     | '/signup'
     | '/wallet'
-    | '/api/inngest'
-    | '/client/active-contracts'
-    | '/client/payouts'
+    | '/client/contracts'
+    | '/client/developers'
+    | '/client/jobs'
+    | '/client/messages'
+    | '/client/payments'
     | '/client/post-job'
-    | '/client/talent'
+    | '/client/proposals'
+    | '/client/settings'
     | '/debug/auth-state'
     | '/debug/impersonate'
-    | '/developer/active-jobs'
+    | '/developer/contracts'
+    | '/developer/jobs'
+    | '/developer/jobs-for-you'
+    | '/developer/messages'
+    | '/developer/payment-methods'
+    | '/developer/profile'
     | '/developer/proposals'
+    | '/developer/settings'
+    | '/developer/wallet'
     | '/jobs/$jobId'
     | '/talent/$userId'
     | '/client'
@@ -306,15 +416,25 @@ export interface FileRouteTypes {
     | '/profile'
     | '/signup'
     | '/wallet'
-    | '/api/inngest'
-    | '/client/active-contracts'
-    | '/client/payouts'
+    | '/client/contracts'
+    | '/client/developers'
+    | '/client/jobs'
+    | '/client/messages'
+    | '/client/payments'
     | '/client/post-job'
-    | '/client/talent'
+    | '/client/proposals'
+    | '/client/settings'
     | '/debug/auth-state'
     | '/debug/impersonate'
-    | '/developer/active-jobs'
+    | '/developer/contracts'
+    | '/developer/jobs'
+    | '/developer/jobs-for-you'
+    | '/developer/messages'
+    | '/developer/payment-methods'
+    | '/developer/profile'
     | '/developer/proposals'
+    | '/developer/settings'
+    | '/developer/wallet'
     | '/jobs/$jobId'
     | '/talent/$userId'
     | '/client/'
@@ -334,7 +454,6 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   SignupRoute: typeof SignupRoute
   WalletRoute: typeof WalletRoute
-  ApiInngestRoute: typeof ApiInngestRoute
   DebugAuthStateRoute: typeof DebugAuthStateRoute
   DebugImpersonateRoute: typeof DebugImpersonateRoute
   TalentUserIdRoute: typeof TalentUserIdRoute
@@ -440,6 +559,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JobsJobIdRouteImport
       parentRoute: typeof JobsRoute
     }
+    '/developer/wallet': {
+      id: '/developer/wallet'
+      path: '/wallet'
+      fullPath: '/developer/wallet'
+      preLoaderRoute: typeof DeveloperWalletRouteImport
+      parentRoute: typeof DeveloperRoute
+    }
+    '/developer/settings': {
+      id: '/developer/settings'
+      path: '/settings'
+      fullPath: '/developer/settings'
+      preLoaderRoute: typeof DeveloperSettingsRouteImport
+      parentRoute: typeof DeveloperRoute
+    }
     '/developer/proposals': {
       id: '/developer/proposals'
       path: '/proposals'
@@ -447,11 +580,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DeveloperProposalsRouteImport
       parentRoute: typeof DeveloperRoute
     }
-    '/developer/active-jobs': {
-      id: '/developer/active-jobs'
-      path: '/active-jobs'
-      fullPath: '/developer/active-jobs'
-      preLoaderRoute: typeof DeveloperActiveJobsRouteImport
+    '/developer/profile': {
+      id: '/developer/profile'
+      path: '/profile'
+      fullPath: '/developer/profile'
+      preLoaderRoute: typeof DeveloperProfileRouteImport
+      parentRoute: typeof DeveloperRoute
+    }
+    '/developer/payment-methods': {
+      id: '/developer/payment-methods'
+      path: '/payment-methods'
+      fullPath: '/developer/payment-methods'
+      preLoaderRoute: typeof DeveloperPaymentMethodsRouteImport
+      parentRoute: typeof DeveloperRoute
+    }
+    '/developer/messages': {
+      id: '/developer/messages'
+      path: '/messages'
+      fullPath: '/developer/messages'
+      preLoaderRoute: typeof DeveloperMessagesRouteImport
+      parentRoute: typeof DeveloperRoute
+    }
+    '/developer/jobs-for-you': {
+      id: '/developer/jobs-for-you'
+      path: '/jobs-for-you'
+      fullPath: '/developer/jobs-for-you'
+      preLoaderRoute: typeof DeveloperJobsForYouRouteImport
+      parentRoute: typeof DeveloperRoute
+    }
+    '/developer/jobs': {
+      id: '/developer/jobs'
+      path: '/jobs'
+      fullPath: '/developer/jobs'
+      preLoaderRoute: typeof DeveloperJobsRouteImport
+      parentRoute: typeof DeveloperRoute
+    }
+    '/developer/contracts': {
+      id: '/developer/contracts'
+      path: '/contracts'
+      fullPath: '/developer/contracts'
+      preLoaderRoute: typeof DeveloperContractsRouteImport
       parentRoute: typeof DeveloperRoute
     }
     '/debug/impersonate': {
@@ -468,11 +636,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DebugAuthStateRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/client/talent': {
-      id: '/client/talent'
-      path: '/talent'
-      fullPath: '/client/talent'
-      preLoaderRoute: typeof ClientTalentRouteImport
+    '/client/settings': {
+      id: '/client/settings'
+      path: '/settings'
+      fullPath: '/client/settings'
+      preLoaderRoute: typeof ClientSettingsRouteImport
+      parentRoute: typeof ClientRoute
+    }
+    '/client/proposals': {
+      id: '/client/proposals'
+      path: '/proposals'
+      fullPath: '/client/proposals'
+      preLoaderRoute: typeof ClientProposalsRouteImport
       parentRoute: typeof ClientRoute
     }
     '/client/post-job': {
@@ -482,26 +657,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClientPostJobRouteImport
       parentRoute: typeof ClientRoute
     }
-    '/client/payouts': {
-      id: '/client/payouts'
-      path: '/payouts'
-      fullPath: '/client/payouts'
-      preLoaderRoute: typeof ClientPayoutsRouteImport
+    '/client/payments': {
+      id: '/client/payments'
+      path: '/payments'
+      fullPath: '/client/payments'
+      preLoaderRoute: typeof ClientPaymentsRouteImport
       parentRoute: typeof ClientRoute
     }
-    '/client/active-contracts': {
-      id: '/client/active-contracts'
-      path: '/active-contracts'
-      fullPath: '/client/active-contracts'
-      preLoaderRoute: typeof ClientActiveContractsRouteImport
+    '/client/messages': {
+      id: '/client/messages'
+      path: '/messages'
+      fullPath: '/client/messages'
+      preLoaderRoute: typeof ClientMessagesRouteImport
       parentRoute: typeof ClientRoute
     }
-    '/api/inngest': {
-      id: '/api/inngest'
-      path: '/api/inngest'
-      fullPath: '/api/inngest'
-      preLoaderRoute: typeof ApiInngestRouteImport
-      parentRoute: typeof rootRouteImport
+    '/client/jobs': {
+      id: '/client/jobs'
+      path: '/jobs'
+      fullPath: '/client/jobs'
+      preLoaderRoute: typeof ClientJobsRouteImport
+      parentRoute: typeof ClientRoute
+    }
+    '/client/developers': {
+      id: '/client/developers'
+      path: '/developers'
+      fullPath: '/client/developers'
+      preLoaderRoute: typeof ClientDevelopersRouteImport
+      parentRoute: typeof ClientRoute
+    }
+    '/client/contracts': {
+      id: '/client/contracts'
+      path: '/contracts'
+      fullPath: '/client/contracts'
+      preLoaderRoute: typeof ClientContractsRouteImport
+      parentRoute: typeof ClientRoute
     }
     '/client/projects/$jobId': {
       id: '/client/projects/$jobId'
@@ -521,20 +710,28 @@ declare module '@tanstack/react-router' {
 }
 
 interface ClientRouteChildren {
-  ClientActiveContractsRoute: typeof ClientActiveContractsRoute
-  ClientPayoutsRoute: typeof ClientPayoutsRoute
+  ClientContractsRoute: typeof ClientContractsRoute
+  ClientDevelopersRoute: typeof ClientDevelopersRoute
+  ClientJobsRoute: typeof ClientJobsRoute
+  ClientMessagesRoute: typeof ClientMessagesRoute
+  ClientPaymentsRoute: typeof ClientPaymentsRoute
   ClientPostJobRoute: typeof ClientPostJobRoute
-  ClientTalentRoute: typeof ClientTalentRoute
+  ClientProposalsRoute: typeof ClientProposalsRoute
+  ClientSettingsRoute: typeof ClientSettingsRoute
   ClientIndexRoute: typeof ClientIndexRoute
   ClientDisputesNewRoute: typeof ClientDisputesNewRoute
   ClientProjectsJobIdRoute: typeof ClientProjectsJobIdRoute
 }
 
 const ClientRouteChildren: ClientRouteChildren = {
-  ClientActiveContractsRoute: ClientActiveContractsRoute,
-  ClientPayoutsRoute: ClientPayoutsRoute,
+  ClientContractsRoute: ClientContractsRoute,
+  ClientDevelopersRoute: ClientDevelopersRoute,
+  ClientJobsRoute: ClientJobsRoute,
+  ClientMessagesRoute: ClientMessagesRoute,
+  ClientPaymentsRoute: ClientPaymentsRoute,
   ClientPostJobRoute: ClientPostJobRoute,
-  ClientTalentRoute: ClientTalentRoute,
+  ClientProposalsRoute: ClientProposalsRoute,
+  ClientSettingsRoute: ClientSettingsRoute,
   ClientIndexRoute: ClientIndexRoute,
   ClientDisputesNewRoute: ClientDisputesNewRoute,
   ClientProjectsJobIdRoute: ClientProjectsJobIdRoute,
@@ -544,14 +741,28 @@ const ClientRouteWithChildren =
   ClientRoute._addFileChildren(ClientRouteChildren)
 
 interface DeveloperRouteChildren {
-  DeveloperActiveJobsRoute: typeof DeveloperActiveJobsRoute
+  DeveloperContractsRoute: typeof DeveloperContractsRoute
+  DeveloperJobsRoute: typeof DeveloperJobsRoute
+  DeveloperJobsForYouRoute: typeof DeveloperJobsForYouRoute
+  DeveloperMessagesRoute: typeof DeveloperMessagesRoute
+  DeveloperPaymentMethodsRoute: typeof DeveloperPaymentMethodsRoute
+  DeveloperProfileRoute: typeof DeveloperProfileRoute
   DeveloperProposalsRoute: typeof DeveloperProposalsRoute
+  DeveloperSettingsRoute: typeof DeveloperSettingsRoute
+  DeveloperWalletRoute: typeof DeveloperWalletRoute
   DeveloperIndexRoute: typeof DeveloperIndexRoute
 }
 
 const DeveloperRouteChildren: DeveloperRouteChildren = {
-  DeveloperActiveJobsRoute: DeveloperActiveJobsRoute,
+  DeveloperContractsRoute: DeveloperContractsRoute,
+  DeveloperJobsRoute: DeveloperJobsRoute,
+  DeveloperJobsForYouRoute: DeveloperJobsForYouRoute,
+  DeveloperMessagesRoute: DeveloperMessagesRoute,
+  DeveloperPaymentMethodsRoute: DeveloperPaymentMethodsRoute,
+  DeveloperProfileRoute: DeveloperProfileRoute,
   DeveloperProposalsRoute: DeveloperProposalsRoute,
+  DeveloperSettingsRoute: DeveloperSettingsRoute,
+  DeveloperWalletRoute: DeveloperWalletRoute,
   DeveloperIndexRoute: DeveloperIndexRoute,
 }
 
@@ -580,7 +791,6 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   SignupRoute: SignupRoute,
   WalletRoute: WalletRoute,
-  ApiInngestRoute: ApiInngestRoute,
   DebugAuthStateRoute: DebugAuthStateRoute,
   DebugImpersonateRoute: DebugImpersonateRoute,
   TalentUserIdRoute: TalentUserIdRoute,

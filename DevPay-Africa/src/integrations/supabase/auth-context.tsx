@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase, type Profile, type UserRole } from "./client";
 import { formatAuthError } from "./auth-errors";
@@ -26,6 +26,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const profileLoadRef = useRef(0);
+
+  const upsertRoleExtension = async (userId: string, role: UserRole) => {
+    if (role === "developer") {
+      await supabase.from("developer_profiles").upsert(
+        { user_id: userId },
+        { onConflict: "user_id", ignoreDuplicates: true }
+      );
+    } else if (role === "client") {
+      await supabase.from("client_profiles").upsert(
+        { user_id: userId },
+        { onConflict: "user_id", ignoreDuplicates: true }
+      );
+    }
+  };
+
+  const syncProfileRole = async (
+    userId: string,
+    role: UserRole,
+    fullName?: string
+  ): Promise<Profile | null> => {
+    const patch: { role: UserRole; full_name?: string } = { role };
+    if (fullName) patch.full_name = fullName;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(patch)
+      .eq("id", userId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Auth] Role sync failed:", formatAuthError(error));
+      return null;
+    }
+
+    await upsertRoleExtension(userId, role);
+    return (data as Profile) ?? null;
+  };
 
   const ensureUserProfile = async (
     userId: string,
@@ -36,7 +75,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select("*")
       .eq("id", userId)
       .maybeSingle();
-    if (existing) return existing as Profile;
+
+    if (existing) {
+      const row = existing as Profile;
+      if (row.role !== details.role) {
+        const synced = await syncProfileRole(userId, details.role, details.fullName);
+        return synced ?? row;
+      }
+      return row;
+    }
 
     const { data: created, error: profileError } = await supabase
       .from("profiles")
@@ -56,40 +103,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const profileRow = (created as Profile) ?? null;
     if (profileRow) {
-      if (details.role === "developer") {
-        await supabase.from("developer_profiles").upsert(
-          { user_id: userId },
-          { onConflict: "user_id", ignoreDuplicates: true }
-        );
-      } else if (details.role === "client") {
-        await supabase.from("client_profiles").upsert(
-          { user_id: userId },
-          { onConflict: "user_id", ignoreDuplicates: true }
-        );
-      }
+      await upsertRoleExtension(userId, details.role);
     }
 
     return profileRow;
   };
 
   const loadProfile = async (userId: string) => {
+    const loadId = ++profileLoadRef.current;
+
     let { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+
+    const { data: u } = await supabase.auth.getUser();
+    const meta = (u.user?.user_metadata ?? {}) as {
+      full_name?: string;
+      role?: UserRole;
+      username?: string;
+    };
+    const localRole =
+      typeof window !== "undefined"
+        ? (localStorage.getItem(OAUTH_ROLE_KEY) as UserRole | null)
+        : null;
+    const intendedRole = (meta.role as UserRole) ?? localRole ?? null;
+    const fullName = meta.full_name ?? (u.user?.email?.split("@")[0] ?? "New User");
+    const username =
+      meta.username ??
+      (u.user?.email?.split("@")[0] ?? `user_${userId.slice(0, 6)}`);
+
+    if (data && intendedRole && (data as Profile).role !== intendedRole) {
+      const synced = await syncProfileRole(userId, intendedRole, fullName);
+      if (synced) data = synced;
+    }
+
     if (!data) {
-      const { data: u } = await supabase.auth.getUser();
-      const meta = (u.user?.user_metadata ?? {}) as {
-        full_name?: string;
-        role?: UserRole;
-        username?: string;
-      };
-      const localRole =
-        typeof window !== "undefined"
-          ? (localStorage.getItem(OAUTH_ROLE_KEY) as UserRole | null)
-          : null;
-      const role = (meta.role as UserRole) ?? localRole ?? "developer";
-      const fullName = meta.full_name ?? (u.user?.email?.split("@")[0] ?? "New User");
-      const username =
-        meta.username ??
-        (u.user?.email?.split("@")[0] ?? `user_${userId.slice(0, 6)}`);
+      const role = intendedRole ?? "developer";
       try {
         data = await ensureUserProfile(userId, {
           email: u.user?.email ?? "",
@@ -100,10 +147,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error("[Auth] Profile setup failed:", formatAuthError(err));
       }
-      if (typeof window !== "undefined") {
-        localStorage.removeItem(OAUTH_ROLE_KEY);
-      }
     }
+
+    if (typeof window !== "undefined" && localRole) {
+      localStorage.removeItem(OAUTH_ROLE_KEY);
+    }
+
+    if (loadId !== profileLoadRef.current) return;
 
     const profileData = (data as Profile) ?? null;
     setProfile(profileData);
@@ -115,35 +165,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    let mounted = true;
+
+    const finishLoading = () => {
+      if (mounted) setLoading(false);
+    };
+
+    const handleSession = async (s: Session | null) => {
       setSession(s);
       if (s?.user) {
-        loadProfile(s.user.id).finally(() => setLoading(false));
+        await loadProfile(s.user.id);
       } else {
         setProfile(null);
-        setLoading(false);
+        useAuthStore.getState().logout();
+      }
+      finishLoading();
+    };
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === "INITIAL_SESSION") {
+        void handleSession(s);
+        return;
+      }
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        void handleSession(s);
+        return;
+      }
+      if (event === "SIGNED_OUT") {
+        setSession(null);
+        setProfile(null);
+        useAuthStore.getState().logout();
+        finishLoading();
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      if (s?.user) {
-        // Add a 5-second timeout to prevent infinite loading
-        const timeout = setTimeout(() => {
-          setLoading(false);
-        }, 5000);
-        loadProfile(s.user.id).finally(() => {
-          clearTimeout(timeout);
-          setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
-    });
-
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
-
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -153,6 +213,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp: AuthCtx["signUp"] = async ({ email, password, fullName, role }) => {
     const username = email.split("@")[0] + "_" + Math.random().toString(36).slice(2, 6);
     const redirectTo = `${window.location.origin}/login`;
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(OAUTH_ROLE_KEY, role);
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -167,7 +232,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const needsConfirmation = !data.session;
 
     if (userId && data.session) {
-      await ensureUserProfile(userId, { email, fullName, role, username });
+      const profileRow = await ensureUserProfile(userId, { email, fullName, role, username });
+      if (profileRow) {
+        setProfile(profileRow);
+        useAuthStore.getState().setUser(profileRow);
+      }
     }
 
     return { needsConfirmation, email };
@@ -176,6 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
+    setSession(null);
     useAuthStore.getState().logout();
   };
 
@@ -202,8 +272,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const ctx = useContext(Ctx);
   if (!ctx) {
-    // Return a safe noop fallback to avoid runtime crashes when a route
-    // renders before the AuthProvider is mounted (client-side transitions).
     return {
       session: null,
       user: null,

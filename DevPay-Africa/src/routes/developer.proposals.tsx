@@ -1,193 +1,113 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { FileText, Loader2, Calendar, DollarSign, Clock, ArrowRight, Eye } from "lucide-react";
-import { useAuth } from "@/integrations/supabase/auth-context";
-import { supabase } from "@/integrations/supabase/client";
+import { useMemo, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { Plus, Eye, Clock, CheckCircle2, XCircle, Search } from "lucide-react";
+import { DevDashboardHeader } from "@/components/dev-dashboard/Header";
+import { proposals, fmtUSD, fmtGHS } from "@/lib/dev-mock-data";
+import { ProposalDialog } from "@/components/dev-dashboard/ProposalDialog";
 
 export const Route = createFileRoute("/developer/proposals")({
   head: () => ({ meta: [{ title: "My Proposals — DevPay Africa" }] }),
-  component: DeveloperProposals,
+  component: ProposalsPage,
 });
 
-type ProposalWithJob = {
-  id: string;
-  developer_id: string;
-  job_id: string;
-  cover_letter: string;
-  bid_amount: number;
-  delivery_days: number | null;
-  status: string;
-  created_at: string;
-  job: {
-    id: string;
-    title: string;
-    status: string;
-    budget_min: number | null;
-    budget_max: number | null;
-  } | null;
+type Status = "pending" | "accepted" | "rejected" | "withdrawn";
+const statusMeta: Record<Status, { label: string; bg: string; fg: string; icon: typeof Clock }> = {
+  pending: { label: "Pending", bg: "rgba(245,166,35,0.15)", fg: "var(--gold-brand)", icon: Clock },
+  accepted: { label: "Accepted", bg: "rgba(0,198,167,0.15)", fg: "var(--cyan-brand)", icon: CheckCircle2 },
+  rejected: { label: "Rejected", bg: "rgba(239,68,68,0.15)", fg: "#F87171", icon: XCircle },
+  withdrawn: { label: "Withdrawn", bg: "rgba(148,163,184,0.15)", fg: "#94A3B8", icon: XCircle },
 };
 
-function DeveloperProposals() {
-  const { session } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [proposals, setProposals] = useState<ProposalWithJob[]>([]);
-  const [filter, setFilter] = useState<"all" | "pending" | "accepted" | "closed">("all");
+const rows = [
+  ...proposals,
+  { id: "p4", title: "Inventory PWA for Makola wholesalers", bidUsd: 780, days: 18, status: "pending" as Status },
+  { id: "p5", title: "Stripe + Paystack dual-gateway checkout", bidUsd: 1100, days: 12, status: "accepted" as Status },
+  { id: "p6", title: "Replatform Shopify storefront to Next.js", bidUsd: 2400, days: 30, status: "rejected" as Status },
+];
 
-  useEffect(() => {
-    if (!session?.user) return;
-    (async () => {
-      setLoading(true);
-      try {
-        const { data } = await supabase
-          .from("proposals")
-          .select("*, job:jobs(id, title, status, budget_min, budget_max)")
-          .eq("developer_id", session.user.id)
-          .order("created_at", { ascending: false });
-
-        setProposals((data as any[]) ?? []);
-      } catch (err) {
-        console.error("Error loading proposals:", err);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [session?.user]);
-
-  // Filter proposals
-  const filtered = useMemo(() => {
-    return proposals.filter((p) => {
-      if (filter === "all") return true;
-      if (filter === "pending") return ["pending", "submitted"].includes(p.status);
-      if (filter === "accepted") return ["accepted", "hired"].includes(p.status);
-      if (filter === "closed") return ["rejected", "closed", "declined"].includes(p.status);
-      return true;
-    });
-  }, [proposals, filter]);
-
-  if (loading) {
-    return (
-      <div className="flex justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+function ProposalsPage() {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const visible = useMemo(
+    () => (q.trim() ? rows.filter((r) => r.title.toLowerCase().includes(q.toLowerCase())) : rows),
+    [q],
+  );
+  const totals = {
+    pending: rows.filter((r) => r.status === "pending").length,
+    accepted: rows.filter((r) => r.status === "accepted").length,
+    winRate: Math.round((rows.filter((r) => r.status === "accepted").length / rows.length) * 100),
+    viewed: 9,
+  };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold">My Proposals</h1>
-        <p className="text-sm text-muted-foreground mt-1">Track and manage your submitted bids and active contracts.</p>
-      </div>
+    <>
+      <DevDashboardHeader title="My Proposals" subtitle="Every bid you've sent — pending, viewed, accepted, rejected." />
 
-      {/* Tabs */}
-      <div className="flex border-b border-border/40 gap-4">
-        {([
-          { key: "all", label: `All (${proposals.length})` },
-          { key: "accepted", label: `Active/Hired (${proposals.filter(p => ["accepted", "hired"].includes(p.status)).length})` },
-          { key: "pending", label: `Pending (${proposals.filter(p => ["pending", "submitted"].includes(p.status)).length})` },
-          { key: "closed", label: `Closed (${proposals.filter(p => ["rejected", "closed", "declined"].includes(p.status)).length})` }
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setFilter(tab.key)}
-            className={`pb-3 text-sm font-medium transition-colors relative ${
-              filter === tab.key
-                ? "text-primary border-b-2 border-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </button>
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { l: "Pending", v: totals.pending, c: "var(--gold-brand)" },
+          { l: "Accepted", v: totals.accepted, c: "var(--cyan-brand)" },
+          { l: "Win Rate", v: `${totals.winRate}%`, c: "#A78BFA" },
+          { l: "Viewed by clients", v: totals.viewed, c: "var(--text-secondary)" },
+        ].map((s) => (
+          <div key={s.l} className="rounded-2xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--color-border)" }}>
+            <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--text-muted)]">{s.l}</div>
+            <div className="mt-2 font-mono-nums text-[26px] font-bold" style={{ color: s.c as string }}>{s.v}</div>
+          </div>
         ))}
       </div>
 
-      {/* Proposals List */}
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
-          <FileText className="h-10 w-10 mx-auto text-muted-foreground/50" />
-          <h3 className="font-display text-lg font-semibold mt-4">No proposals found</h3>
-          <p className="text-sm text-muted-foreground mt-2">
-            {filter === "all" ? "You haven't submitted any proposals yet." : `You have no ${filter} proposals.`}
-          </p>
-          {filter === "all" && (
-            <Button asChild className="mt-5 bg-[image:var(--gradient-primary)] text-primary-foreground">
-              <Link to="/jobs">Browse Open Jobs</Link>
-            </Button>
-          )}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="relative flex-1 min-w-[220px] max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search proposals…"
+            className="h-10 w-full rounded-[10px] bg-[color:var(--surface)] pl-9 pr-3 text-[13px] text-white outline-none placeholder:text-[color:var(--text-muted)]"
+            style={{ border: "1px solid var(--color-border)" }}
+          />
         </div>
-      ) : (
-        <div className="space-y-4">
-          {filtered.map((p) => {
-            const isHired = ["accepted", "hired"].includes(p.status);
-            const isClosed = ["rejected", "closed", "declined"].includes(p.status);
-            
-            return (
-              <div
-                key={p.id}
-                className={`rounded-2xl border bg-card p-6 transition-all hover:border-primary/30 ${
-                  isHired ? "border-primary/20 bg-primary/5" : "border-border/60"
-                }`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-1 max-w-2xl">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border ${
-                        isHired ? "bg-success/15 text-success border-success/35" : 
-                        isClosed ? "bg-destructive/15 text-destructive border-destructive/35" : 
-                        "bg-accent/15 text-accent border-accent/35"
-                      }`}>
-                        {p.status}
-                      </span>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5" />
-                        Submitted on {new Date(p.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <h3 className="font-display text-lg font-bold mt-1">
-                      {p.job?.title ?? "Untitled Job Posting"}
-                    </h3>
-                  </div>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-[color:var(--cyan-brand)] px-4 text-[13.5px] font-semibold text-[color:var(--background)] transition-all hover:scale-[1.02] hover:shadow-cyan active:scale-[0.98]"
+        >
+          <Plus className="h-4 w-4" /> New Proposal
+        </button>
+      </div>
 
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <div className="flex items-center text-primary font-display font-bold text-lg">
-                      <DollarSign className="h-4 w-4 shrink-0" />
-                      {p.bid_amount.toLocaleString()}
-                    </div>
-                    {p.delivery_days && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock className="h-3 w-3" /> {p.delivery_days} days delivery
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-border/30">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Your Cover Letter</div>
-                  <p className="text-sm text-muted-foreground mt-1.5 whitespace-pre-wrap line-clamp-3">
-                    {p.cover_letter}
-                  </p>
-                </div>
-
-                <div className="mt-5 flex justify-end gap-2">
-                  <Button asChild variant="outline" size="sm">
-                    <Link to="/jobs/$jobId" params={{ jobId: p.job_id }}>
-                      <Eye className="mr-2 h-4 w-4" /> View Job Post
-                    </Link>
-                  </Button>
-                  {isHired && (
-                    <Button asChild size="sm" className="bg-[image:var(--gradient-primary)] text-primary-foreground">
-                      <Link to="/jobs/$jobId" params={{ jobId: p.job_id }} hash="escrow">
-                        Manage Escrow <ArrowRight className="ml-2 h-4 w-4" />
-                      </Link>
-                    </Button>
-                  )}
-                </div>
+      <div className="overflow-hidden rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--color-border)" }}>
+        <div className="hidden grid-cols-[1fr_120px_90px_120px_60px] gap-4 border-b px-5 py-3 text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--text-muted)] sm:grid" style={{ borderColor: "var(--color-border)" }}>
+          <div>Job</div><div>Bid</div><div>Days</div><div>Status</div><div></div>
+        </div>
+        {visible.length === 0 && (
+          <div className="px-5 py-10 text-center text-[13px] text-[color:var(--text-muted)]">No proposals match "{q}".</div>
+        )}
+        {visible.map((r) => {
+          const m = statusMeta[r.status];
+          const Icon = m.icon;
+          return (
+            <div key={r.id} className="grid grid-cols-1 gap-2 border-b px-5 py-4 last:border-0 sm:grid-cols-[1fr_120px_90px_120px_60px] sm:items-center sm:gap-4" style={{ borderColor: "var(--color-border)" }}>
+              <div className="min-w-0">
+                <div className="truncate text-[14px] font-medium text-white">{r.title}</div>
+                <div className="mt-0.5 text-[12px] text-[color:var(--text-muted)]">Submitted recently</div>
               </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
+              <div className="font-mono-nums text-[14px] text-white">{fmtUSD(r.bidUsd)}<div className="text-[11px] text-[color:var(--text-muted)]">{fmtGHS(r.bidUsd)}</div></div>
+              <div className="font-mono-nums text-[13.5px] text-[color:var(--text-secondary)]">{r.days}d</div>
+              <div>
+                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-semibold" style={{ background: m.bg, color: m.fg }}>
+                  <Icon className="h-3 w-3" /> {m.label}
+                </span>
+              </div>
+              <button className="justify-self-start sm:justify-self-end grid h-8 w-8 place-items-center rounded-md text-[color:var(--text-muted)] hover:bg-[color:var(--surface-hover)] hover:text-white" aria-label="View">
+                <Eye className="h-4 w-4" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <ProposalDialog open={open} onOpenChange={setOpen} />
+    </>
   );
 }

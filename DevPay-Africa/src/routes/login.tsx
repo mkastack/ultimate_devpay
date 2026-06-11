@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { formatAuthError } from "@/integrations/supabase/auth-errors";
 import { useAuth } from "@/integrations/supabase/auth-context";
 import { supabase } from "@/integrations/supabase/client";
-import { SentryErrorTest } from "@/components/SentryErrorTest";
+import { getHomePathForRole } from "@/lib/role-routes";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Log in — DevPay Africa" }] }),
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/login")({
 });
 
 function Login() {
-  const { signIn, session, profile, resendConfirmation } = useAuth();
+  const { signIn, session, profile, loading, resendConfirmation } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
   const [busy, setBusy] = useState(false);
@@ -25,8 +25,10 @@ function Login() {
   const [needsConfirm, setNeedsConfirm] = useState(false);
 
   useEffect(() => {
-    if (session && profile) navigate({ to: "/dashboard" });
-  }, [session, profile, navigate]);
+    if (!loading && session && profile) {
+      navigate({ to: getHomePathForRole(profile.role) });
+    }
+  }, [loading, session, profile, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +38,6 @@ function Login() {
     try {
       await signIn(form.email, form.password);
       toast.success("Welcome back!");
-      navigate({ to: "/dashboard" });
     } catch (err) {
       const msg = formatAuthError(err);
       if (/confirm/i.test(msg) || /not confirmed/i.test(msg)) {
@@ -112,9 +113,6 @@ function Login() {
           <p className="text-xs text-center text-muted-foreground mt-4">
             New here? <Link to="/signup" className="text-primary hover:underline">Create an account</Link>
           </p>
-          <div className="mt-6 pt-4 border-t border-border flex justify-center">
-            <SentryErrorTest />
-          </div>
         </form>
       </main>
     </div>

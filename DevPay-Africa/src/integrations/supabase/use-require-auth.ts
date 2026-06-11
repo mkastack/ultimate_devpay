@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/integrations/supabase/auth-context";
 import type { UserRole } from "@/integrations/supabase/client";
+import { getHomePathForRole } from "@/lib/role-routes";
 
 /** Redirects to /login when unauthenticated, or to the right dashboard when role mismatches. */
 export function useRequireAuth(requiredRole?: UserRole) {
@@ -15,7 +16,7 @@ export function useRequireAuth(requiredRole?: UserRole) {
       return;
     }
     if (requiredRole && profile && profile.role !== requiredRole) {
-      navigate({ to: profile.role === "developer" ? "/developer" : "/client" });
+      navigate({ to: getHomePathForRole(profile.role) });
     }
   }, [session, profile, loading, requiredRole, navigate]);
 

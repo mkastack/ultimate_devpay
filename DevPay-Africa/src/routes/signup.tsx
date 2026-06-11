@@ -9,10 +9,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/integrations/supabase/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import type { UserRole } from "@/integrations/supabase/client";
-
 import { formatAuthError } from "@/integrations/supabase/auth-errors";
-import { captureException } from "@/integrations/sentry";
-import { sendWelcomeEmail } from "@/integrations/resend";
+import { getHomePathForRole } from "@/lib/role-routes";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({ meta: [{ title: "Sign Up — DevPay Africa" }] }),
@@ -20,7 +18,7 @@ export const Route = createFileRoute("/signup")({
 });
 
 function SignUp() {
-  const { signUp, resendConfirmation, session, profile } = useAuth();
+  const { signUp, resendConfirmation, session, profile, loading } = useAuth();
   const navigate = useNavigate();
   const [role, setRole] = useState<UserRole | null>(null);
   const [form, setForm] = useState({ fullName: "", email: "", password: "" });
@@ -30,10 +28,10 @@ function SignUp() {
   const [resending, setResending] = useState(false);
 
   useEffect(() => {
-    if (!confirmSent && session && profile) {
-      navigate({ to: "/dashboard" });
+    if (!confirmSent && !loading && session && profile) {
+      navigate({ to: getHomePathForRole(profile.role) });
     }
-  }, [confirmSent, session, profile, navigate]);
+  }, [confirmSent, loading, session, profile, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,13 +43,10 @@ function SignUp() {
       if (needsConfirmation) {
         setConfirmSent(email);
       } else {
-        // Send welcoming transaction email via Resend
-        sendWelcomeEmail(form.email, form.fullName);
         toast.success("Account created — welcome!");
-        navigate({ to: "/dashboard" });
+        navigate({ to: getHomePathForRole(role), replace: true });
       }
     } catch (err) {
-      captureException(err, { tags: { action: "user-signup", role } });
       const msg = formatAuthError(err);
       setError(
         msg.includes("already registered")
@@ -70,7 +65,6 @@ function SignUp() {
       await resendConfirmation(confirmSent);
       toast.success("Confirmation email sent again");
     } catch (err) {
-      captureException(err, { tags: { action: "resend-confirm", email: confirmSent } });
       toast.error(err instanceof Error ? err.message : "Could not resend");
     } finally {
       setResending(false);
@@ -82,9 +76,10 @@ function SignUp() {
       localStorage.setItem("devpay_oauth_role", role);
     }
 
+    const home = role ? getHomePathForRole(role) : "/dashboard";
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+      options: { redirectTo: `${window.location.origin}${home}` },
     });
     if (error) toast.error(error.message);
   };

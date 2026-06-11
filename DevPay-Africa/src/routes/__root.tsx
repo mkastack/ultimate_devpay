@@ -12,19 +12,7 @@ import {
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { LoadingSplash } from "@/components/LoadingSplash";
-
-import { useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuthStore } from "@/lib/stores/auth-store";
 import { AuthProvider } from "@/integrations/supabase/auth-context";
-
-import { initSentry, captureException } from "@/integrations/sentry";
-import * as Sentry from "@sentry/react";
-
-const SentryErrorBoundary = Sentry.ErrorBoundary;
-
-// Initialize Sentry 24/7 crash logger on app start
-initSentry();
 
 function NotFoundComponent() {
   return (
@@ -49,8 +37,6 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  // Dispatch React layout crashes or routing issues to Sentry
-  captureException(error, { tags: { source: "react-router-error-boundary" } });
   console.error(error);
   const router = useRouter();
 
@@ -126,97 +112,15 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const { setUser, logout } = useAuthStore();
-
-  useEffect(() => {
-    // Check session on app load
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", session.user.id)
-          .maybeSingle();
-
-        if (profile) {
-          // @ts-ignore - Ignore profile type mismatches temporarily
-          setUser(profile);
-          // Also set user context in Sentry
-          Sentry.setUser({
-            id: profile.id,
-            email: profile.email,
-            username: profile.username,
-          });
-        }
-      } else {
-        logout();
-      }
-    };
-
-    getSession();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .maybeSingle();
-
-          if (profile) {
-            // @ts-ignore - Ignore profile type mismatches temporarily
-            setUser(profile);
-            Sentry.setUser({
-              id: profile.id,
-              email: profile.email,
-              username: profile.username,
-            });
-          }
-        }
-
-        if (event === "SIGNED_OUT") {
-          logout();
-          Sentry.setUser(null);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, [setUser, logout]);
 
   return (
-    <SentryErrorBoundary
-      fallback={({ error, resetError }) => (
-        <div className="min-h-screen bg-[#0A1628] flex items-center justify-center">
-          <div className="text-center text-white p-8">
-            <h1 className="text-2xl font-bold mb-4">
-              Something went wrong
-            </h1>
-            <p className="text-[#8BA3C7] mb-6">
-              Our team has been notified automatically.
-            </p>
-            <button
-              onClick={resetError}
-              className="bg-[#00C6A7] text-black px-6 py-3 rounded-xl font-semibold"
-            >
-              Try again
-            </button>
-          </div>
-        </div>
-      )}
-    >
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <LoadingSplash />
-          <ScrollRestoration />
-          <Outlet />
-          <Toaster />
-        </AuthProvider>
-      </QueryClientProvider>
-    </SentryErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <LoadingSplash />
+        <ScrollRestoration />
+        <Outlet />
+        <Toaster />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }

@@ -8,9 +8,6 @@ import { useAuth } from "@/integrations/supabase/auth-context";
 import { toast } from "sonner";
 import { EscrowTimeline } from "@/components/EscrowTimeline";
 
-import { captureException } from "@/integrations/sentry";
-import { sendPaymentConfirmationEmail } from "@/integrations/resend";
-
 export const Route = createFileRoute("/client/projects/$jobId")({
   head: () => ({ meta: [{ title: "Project — DevPay Africa" }] }),
   component: ProjectDetail,
@@ -53,7 +50,7 @@ function ProjectDetail() {
         setMessages((mg as Msg[]) ?? []);
         setLoading(false);
       } catch (err) {
-        captureException(err, { tags: { page: "project-detail", jobId } });
+        console.error("[project-detail] load error:", err);
         setLoading(false);
       }
     })();
@@ -78,7 +75,7 @@ function ProjectDetail() {
       const { error } = await supabase.from("project_messages").insert({ job_id: jobId, sender_id: session.user.id, body });
       if (error) throw error;
     } catch (error) {
-      captureException(error, { userId: session.user.id, tags: { action: "send-chat-msg", jobId } });
+      console.error("[project-detail] send message error:", error);
       toast.error("Failed to send message");
     }
   };
@@ -98,36 +95,9 @@ function ProjectDetail() {
         status: "completed"
       });
 
-      // Fetch the developer ID from accepted proposal for this job to notify them
-      const { data: proposal } = await supabase
-        .from("proposals")
-        .select("developer_id")
-        .eq("job_id", jobId)
-        .eq("status", "accepted")
-        .maybeSingle();
-
-      if (proposal?.developer_id) {
-        // Query developer email profile
-        const { data: devProfile } = await supabase
-          .from("profiles")
-          .select("full_name, email")
-          .eq("id", proposal.developer_id)
-          .maybeSingle();
-
-        if (devProfile?.email) {
-          // Trigger milestone payout confirmation email via Resend
-          sendPaymentConfirmationEmail(
-            devProfile.email,
-            devProfile.full_name || "Developer",
-            Number(m.amount),
-            m.id
-          );
-        }
-      }
-
       toast.success("Funds released to developer");
     } catch (error) {
-      captureException(error, { userId: session?.user?.id, tags: { action: "approve-milestone", milestoneId: m.id } });
+      console.error("[project-detail] approve milestone error:", error);
       toast.error("Failed to release funds");
     } finally {
       setBusy(null);

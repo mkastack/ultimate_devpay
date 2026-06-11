@@ -6,14 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Save, Plus, X, Upload } from "lucide-react";
-import { fileToDataUri } from "@/lib/file-to-data-uri";
-import {
-  isCloudinaryConfigured,
-  isCloudinaryDeliveryUrl,
-  profilePhotoPublicId,
-} from "@/lib/cloudinary-client";
-import { uploadProfilePhotoFn } from "@/lib/upload-actions";
-import { OptimizedImage } from "@/components/ui/OptimizedImage";
+import { uploadAvatar } from "@/lib/upload-avatar";
 import { useRequireAuth } from "@/integrations/supabase/use-require-auth";
 import { useAuth } from "@/integrations/supabase/auth-context";
 import { supabase } from "@/integrations/supabase/client";
@@ -118,10 +111,7 @@ function ProfilePage() {
     }
     setUploadingAvatar(true);
     try {
-      const dataUri = await fileToDataUri(file);
-      const { url } = await uploadProfilePhotoFn({
-        data: { dataUri, userId: session.user.id },
-      });
+      const url = await uploadAvatar(session.user.id, file);
       setAvatarUrl(url);
       toast.success("Photo uploaded — save your profile to keep it.");
     } catch (err) {
@@ -195,18 +185,10 @@ function ProfilePage() {
             <div className="sm:col-span-2">
               <Label>Profile photo</Label>
               <div className="flex flex-wrap items-center gap-3 mt-1.5">
-                {avatarUrl && isCloudinaryConfigured() && isCloudinaryDeliveryUrl(avatarUrl) && session?.user ? (
-                  <OptimizedImage
-                    publicId={profilePhotoPublicId(session.user.id)}
-                    width={56}
-                    height={56}
-                    alt={fullName || "Profile photo"}
-                    className="h-14 w-14 rounded-full object-cover border border-border"
-                  />
-                ) : avatarUrl ? (
+                {avatarUrl ? (
                   <img
                     src={avatarUrl}
-                    alt=""
+                    alt={fullName || "Profile photo"}
                     className="h-14 w-14 rounded-full object-cover border border-border"
                   />
                 ) : null}
