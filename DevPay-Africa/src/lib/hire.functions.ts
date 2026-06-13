@@ -14,11 +14,13 @@ type HirePayload = {
 };
 
 export const createHireRequest = createServerFn({ method: "POST" })
-  .validator((data: HirePayload) => data)
+  .inputValidator((data: HirePayload) => data)
   .handler(async ({ data }) => {
     return {
       hire_id: `hire_${data.job_id}_${Date.now()}`,
       contract_id: `contract_${data.job_id}`,
+      escrow_id: `escrow_${data.job_id}`,
+      escrow_status: "pending",
       job_title: data.job_title,
       developer_name: data.developer_name,
     };

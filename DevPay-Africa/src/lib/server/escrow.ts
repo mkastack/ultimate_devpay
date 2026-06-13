@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { supabaseServer } from "@/integrations/supabase/server";
 
 export const releaseEscrow = createServerFn()
-  .validator((data: { contract_id: string; escrow_id: string }) => data)
+  .inputValidator((data: { contract_id: string; escrow_id: string }) => data)
   .handler(async ({ data }) => {
     const { error } = await supabaseServer
       .from("escrow_transactions")

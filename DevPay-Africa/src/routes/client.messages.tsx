@@ -2,8 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
 import { TopBar } from "@/components/hirer-dashboard/TopBar";
-import { Send, ArrowLeft, Menu } from "lucide-react";
+import { Send, ArrowLeft, Menu, Paperclip } from "lucide-react";
 import { conversations } from "@/lib/hirer-mock-data";
+import { toast } from "sonner";
 import { initials } from "@/lib/hirer-format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -133,7 +134,7 @@ function MessagesPage() {
       <div
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
-        className="grid h-[calc(100vh-220px)] md:h-[70vh] overflow-hidden rounded-2xl border bg-card md:grid-cols-[320px_1fr]"
+        className="grid h-[calc(100vh-270px)] md:h-[70vh] overflow-hidden rounded-2xl border bg-card md:grid-cols-[320px_1fr]"
         style={{ borderColor: "var(--border)" }}
       >
         {/* Conversation list — desktop sidebar */}
@@ -245,14 +246,23 @@ function MessagesPage() {
             )}
           </div>
 
-          <div className="border-t p-3 sm:p-4" style={{ borderColor: "var(--border)" }}>
+          <div className="border-t p-3 pb-6 sm:p-4" style={{ borderColor: "var(--border)" }}>
             <button
               className="mb-3 flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] sm:text-[12px] font-semibold gold-gradient"
               style={{ color: "var(--background)" }}
             >
               💰 Release Milestone Payment
             </button>
-            <div className="flex items-center gap-2">
+             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => toast.success("Attachment interface: select files to upload")}
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--card-hover)] text-[color:var(--text-secondary)] border hover:text-white transition-colors"
+                style={{ borderColor: "var(--border)" }}
+                aria-label="Attach file"
+              >
+                <Paperclip className="h-4 w-4" />
+              </button>
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}

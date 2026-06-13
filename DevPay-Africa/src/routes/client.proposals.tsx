@@ -5,6 +5,9 @@ import { proposalsByJob } from "@/lib/hirer-mock-data";
 import { fmtGHS, initials } from "@/lib/hirer-format";
 import { toast } from "sonner";
 import { HireDialog, type HireTarget } from "@/components/hirer-dashboard/HireDialog";
+import { DeveloperProfileDialog } from "@/components/hirer-dashboard/DeveloperProfileDialog";
+import { getHirerDeveloperByName, type HirerDeveloper } from "@/lib/hirer-developer-catalog";
+import { hireTargetFromDeveloper } from "@/lib/hirer-hire-flow";
 
 export const Route = createFileRoute("/client/proposals")({
   head: () => ({ meta: [{ title: "Proposals · DevPay Africa" }] }),
@@ -16,6 +19,8 @@ function ProposalsPage() {
   const [target, setTarget] = useState<HireTarget | null>(null);
   const [open, setOpen] = useState(false);
   const [shortlisted, setShortlisted] = useState<Set<string>>(new Set());
+  const [profileDev, setProfileDev] = useState<HirerDeveloper | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const toggleShortlist = (id: string) => {
     setShortlisted((prev) => {
@@ -63,8 +68,8 @@ function ProposalsPage() {
                   className="rounded-xl border bg-card p-4 sm:p-5 transition-colors"
                   style={{ borderColor: "var(--border)" }}
                 >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                    <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="flex flex-col sm:flex-row items-start gap-4">
+                    <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1 w-full">
                       <div
                         className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold"
                         style={{
@@ -78,9 +83,11 @@ function ProposalsPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-semibold text-foreground">{p.dev.name}</span>
-                          <span className="font-mono text-[12px]" style={{ color: "var(--gold)" }}>
+                          <span className="font-mono text-[12px] whitespace-nowrap" style={{ color: "var(--gold)" }}>
                             ⭐ {p.dev.rating} · {p.dev.jobs} jobs
                           </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
                           {p.ai_generated && (
                             <span
                               className="rounded-full px-2 py-0.5 text-[10px] font-medium"
@@ -89,9 +96,12 @@ function ProposalsPage() {
                               ✨ AI Assisted
                             </span>
                           )}
+                          <span className="text-[11px] text-[color:var(--text-muted)] sm:hidden">
+                            Posted {p.hours_ago}h ago
+                          </span>
                         </div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                        <div className="mt-2.5 flex items-center gap-2 w-full">
+                          <span className="text-[11px] shrink-0" style={{ color: "var(--text-muted)" }}>
                             🤖 AI Match:
                           </span>
                           <div
@@ -106,38 +116,37 @@ function ProposalsPage() {
                               }}
                             />
                           </div>
-                          <span className="font-mono text-[12px] font-bold" style={{ color: "var(--cyan)" }}>
+                          <span className="font-mono text-[12px] font-bold text-[color:var(--cyan)] shrink-0">
                             {p.ai_match}%
                           </span>
                         </div>
-                        <p className="mt-3 text-[13px]" style={{ color: "var(--text-secondary)" }}>
+                        <p className="mt-3 text-[13px] leading-relaxed text-[color:var(--text-secondary)]">
                           {p.preview}
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-shrink-0 flex-row sm:flex-col items-start sm:items-end justify-between sm:justify-start gap-2 sm:gap-2 border-t sm:border-t-0 pt-3 sm:pt-0" style={{ borderColor: "var(--border)" }}>
-                      <div>
-                        <div className="font-mono text-lg font-bold text-foreground">{fmtGHS(p.bid)}</div>
-                        <div className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
-                          {p.days} days · {p.hours_ago}h ago
+                    <div className="flex w-full flex-row items-center justify-between gap-3 border-t pt-3 mt-1 sm:flex-col sm:items-end sm:justify-start sm:border-t-0 sm:pt-0 sm:mt-0 sm:w-auto shrink-0" style={{ borderColor: "var(--border)" }}>
+                      <div className="text-left sm:text-right">
+                        <div className="font-mono text-base font-bold text-foreground">{fmtGHS(p.bid)}</div>
+                        <div className="text-[12px] text-[color:var(--text-secondary)] whitespace-nowrap">
+                          {p.days} days <span className="hidden sm:inline">· {p.hours_ago} hrs ago</span>
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 shrink-0">
                         <button
-                          onClick={() => toggleShortlist(p.id)}
-                          className="h-9 rounded-md border px-3 text-[12px] font-semibold transition-colors"
-                          style={{
-                            borderColor: "var(--gold)",
-                            color: isShortlisted ? "var(--background)" : "var(--gold)",
-                            background: isShortlisted ? "var(--gold)" : "transparent",
+                          type="button"
+                          onClick={() => {
+                            const dev = getHirerDeveloperByName(p.dev.name);
+                            if (dev) { setProfileDev(dev); setProfileOpen(true); }
                           }}
+                          className="h-8 rounded-md border px-2.5 text-[11px] font-semibold transition-colors"
+                          style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
                         >
-                          {isShortlisted ? "★ Shortlisted" : "★ Shortlist"}
+                          View Profile
                         </button>
                         <button
                           onClick={() => openHire(p.id, g.job_id, g.job_title, p.dev.name, p.bid, p.days)}
-                          className="h-9 rounded-md px-4 text-[12px] font-semibold transition-transform hover:scale-[1.02] gold-gradient shadow-gold"
-                          style={{ color: "var(--background)" }}
+                          className="h-8 rounded-md px-3 text-[11px] font-semibold transition-transform hover:scale-[1.02] gold-gradient shadow-gold text-[color:var(--background)]"
                         >
                           Hire Now →
                         </button>
@@ -157,6 +166,19 @@ function ProposalsPage() {
         onOpenChange={setOpen}
         target={target}
         onSuccess={(r) => navigate({ to: "/client/contracts", search: { hire: r.hire_id } as any })}
+      />
+      <DeveloperProfileDialog
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        developer={profileDev}
+        onHire={
+          profileDev
+            ? () => {
+                setTarget(hireTargetFromDeveloper(profileDev));
+                setOpen(true);
+              }
+            : undefined
+        }
       />
     </>
   );

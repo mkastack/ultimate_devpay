@@ -28,7 +28,7 @@ export function WelcomeBanner() {
       {/* Pro badge top-right */}
       {developer.subscription_plan === "pro" && (
         <span
-          className="absolute right-6 top-6 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold"
+          className="absolute right-4 top-4 md:right-6 md:top-6 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold"
           style={{
             background: "rgba(245,166,35,0.15)",
             border: "1px solid rgba(245,166,35,0.30)",
@@ -38,12 +38,12 @@ export function WelcomeBanner() {
           ⭐ Pro Developer
         </span>
       )}
-
-      <div className="relative z-10 max-w-[60%]">
-        <div className="font-display text-[26px] font-bold text-white">
+ 
+      <div className="relative z-10 max-w-full md:max-w-[65%]">
+        <div className="font-display text-[22px] sm:text-[26px] font-bold text-white pr-20 md:pr-0">
           {greeting()}, {firstName} 👋
         </div>
-        <div className="mt-2 text-[15px] text-white/70">
+        <div className="mt-2 text-[14px] sm:text-[15px] text-white/70">
           You have {counts.pendingProposals} pending proposals and {counts.activeContracts} active contracts.
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { BadgeCheck, Lock, MessageCircle, ArrowUpRight } from "lucide-react";
 import { DevDashboardHeader } from "@/components/dev-dashboard/Header";
@@ -6,14 +6,26 @@ import { contracts, conversations, fmtUSD, fmtGHS } from "@/lib/dev-mock-data";
 import { ReleaseDialog } from "@/components/dev-dashboard/ReleaseDialog";
 import { Link } from "@tanstack/react-router";
 
+type ContractsSearch = { contract?: string };
+
 export const Route = createFileRoute("/developer/contracts")({
   head: () => ({ meta: [{ title: "Contracts — DevPay Africa" }] }),
+  validateSearch: (s: Record<string, unknown>): ContractsSearch => ({
+    contract: typeof s.contract === "string" ? s.contract : undefined,
+  }),
   component: ContractsPage,
 });
 
 function ContractsPage() {
+  const { contract: focusId } = Route.useSearch();
   const [release, setRelease] = useState<(typeof contracts)[number] | null>(null);
   const totalEscrow = contracts.reduce((s, c) => s + c.escrowUsd, 0);
+
+  useEffect(() => {
+    if (!focusId) return;
+    const el = document.getElementById(`contract-${focusId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusId]);
   const totalAgreed = contracts.reduce((s, c) => s + c.agreedUsd, 0);
 
   return (
@@ -41,7 +53,16 @@ function ContractsPage() {
           const pct = Math.round((c.milestoneCurrent / c.milestoneTotal) * 100);
           const thread = conversations.find((m) => m.name === c.clientName)?.id;
           return (
-            <div key={c.id} className="rounded-2xl p-5 transition-all hover:-translate-y-0.5" style={{ background: "var(--surface)", border: "1px solid var(--color-border)" }}>
+            <div
+              id={`contract-${c.id}`}
+              key={c.id}
+              className="rounded-2xl p-5 transition-all hover:-translate-y-0.5"
+              style={{
+                background: "var(--surface)",
+                border: focusId === c.id ? "1px solid var(--cyan-brand)" : "1px solid var(--color-border)",
+                boxShadow: focusId === c.id ? "0 0 0 1px rgba(0,198,167,0.2)" : undefined,
+              }}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 text-[12.5px] text-[color:var(--text-secondary)]">

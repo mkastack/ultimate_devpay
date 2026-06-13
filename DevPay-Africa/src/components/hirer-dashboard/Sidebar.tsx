@@ -14,10 +14,11 @@ type NavItem = {
   label: string;
   Icon: typeof Home;
   badge?: number;
+  exact?: boolean;
 };
 
 const items: NavItem[] = [
-  { to: "/client", label: "Overview", Icon: Home },
+  { to: "/client", label: "Overview", Icon: Home, exact: true },
   { to: "/client/post-job", label: "Post a Job", Icon: PlusCircle },
   { to: "/client/developers", label: "Browse Developers", Icon: Users },
   { to: "/client/jobs", label: "My Jobs", Icon: Briefcase, badge: client.open_jobs_count },
@@ -65,7 +66,9 @@ export function Sidebar() {
           )}
           <div className="space-y-1">
             {items.map((it) => {
-              const isActive = pathname === it.to || (it.to !== "/" && pathname.startsWith(it.to));
+              const isActive = it.exact
+                ? pathname === it.to || pathname === `${it.to}/`
+                : pathname === it.to || pathname.startsWith(`${it.to}/`);
               const link = (
                 <Link
                   key={it.to}

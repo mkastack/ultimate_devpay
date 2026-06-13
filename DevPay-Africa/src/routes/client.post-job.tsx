@@ -35,6 +35,7 @@ function PostJobPage() {
   const [timeline, setTimeline] = useState<string | null>(null);
   const [experience, setExperience] = useState<string | null>(null);
   const [skills, setSkills] = useState<string[]>([]);
+  const [customCategory, setCustomCategory] = useState("");
   const [budgetType, setBudgetType] = useState<"fixed" | "hourly">("fixed");
   const [budget, setBudget] = useState<string>("");
   const [featured, setFeatured] = useState(false);
@@ -87,6 +88,8 @@ function PostJobPage() {
             setCategory={setCategory}
             projectType={projectType}
             setProjectType={setProjectType}
+            customCategory={customCategory}
+            setCustomCategory={setCustomCategory}
           />
         )}
         {step === 1 && (
@@ -109,7 +112,7 @@ function PostJobPage() {
             category={category} title={title} timeline={timeline}
             experience={experience} skills={skills} budget={budget}
             featured={featured} setFeatured={setFeatured}
-            budgetType={budgetType}
+            budgetType={budgetType} customCategory={customCategory}
           />
         )}
       </div>
@@ -148,10 +151,11 @@ function PostJobPage() {
 }
 
 function StepType({
-  category, setCategory, projectType, setProjectType,
+  category, setCategory, projectType, setProjectType, customCategory, setCustomCategory,
 }: {
-  category: string | null; setCategory: (s: string) => void;
+  category: string | null; setCategory: (s: string | null) => void;
   projectType: string; setProjectType: (s: string) => void;
+  customCategory: string; setCustomCategory: (s: string) => void;
 }) {
   return (
     <>
@@ -159,28 +163,32 @@ function StepType({
       <p className="mb-6 mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
         Select the category that best fits your project.
       </p>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         {CATEGORIES.map((c) => {
           const sel = category === c.id;
           return (
             <button
               key={c.id}
               onClick={() => setCategory(c.id)}
-              className="relative rounded-xl border p-4 text-left transition-all"
+              className="relative rounded-xl border p-4 transition-all"
               style={{
                 borderColor: sel ? "var(--gold)" : "var(--border)",
                 borderWidth: sel ? 2 : 1,
                 background: sel ? "rgba(245,166,35,0.08)" : "var(--card-hover)",
               }}
             >
-              <div
-                className="mb-2 flex h-10 w-10 items-center justify-center rounded-full text-lg"
-                style={{ background: c.color }}
-              >
-                {c.icon}
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-lg"
+                  style={{ background: c.color }}
+                >
+                  {c.icon}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-foreground truncate">{c.label}</div>
+                  <div className="text-[11.5px] truncate" style={{ color: "var(--text-muted)" }}>{c.desc}</div>
+                </div>
               </div>
-              <div className="text-sm font-semibold text-foreground">{c.label}</div>
-              <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>{c.desc}</div>
               {sel && (
                 <div
                   className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full"
@@ -192,6 +200,26 @@ function StepType({
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-4">
+        <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.08em]" style={{ color: "var(--text-muted)" }}>
+          Other / Preferred job category
+        </label>
+        <input
+          value={customCategory}
+          onChange={(e) => {
+            setCustomCategory(e.target.value);
+            if (e.target.value) {
+              setCategory("custom");
+            } else if (category === "custom") {
+              setCategory(null);
+            }
+          }}
+          placeholder="e.g. Smart Contract Audit, Game Dev, Technical Writing"
+          className="h-12 w-full rounded-xl border bg-[var(--card-hover)] px-4 text-sm text-foreground outline-none transition-all placeholder:text-[var(--text-muted)] focus:border-2 focus:border-[var(--gold)]"
+          style={{ borderColor: "var(--border)" }}
+        />
       </div>
 
       <div
@@ -295,7 +323,7 @@ function StepDetails({
       </div>
 
       <Label className="mt-6">Experience Level *</Label>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { id: "junior", label: "Junior", sub: "1–3 yrs · Basic tasks" },
           { id: "mid", label: "Mid-level", sub: "3–5 yrs · Solid work" },
@@ -496,8 +524,14 @@ function StepBudget({
 }
 
 function StepReview({
-  category, title, timeline, experience, skills, budget, featured, setFeatured, budgetType,
+  category, title, timeline, experience, skills, budget, featured, setFeatured, budgetType, customCategory,
 }: any) {
+  const getCategoryLabel = () => {
+    if (customCategory) return customCategory;
+    const cat = CATEGORIES.find(c => c.id === category);
+    return cat ? cat.label : (category || "Not set");
+  };
+
   return (
     <>
       <h2 className="mb-6 font-display text-[22px] font-bold text-foreground">Review your job post</h2>
@@ -524,7 +558,7 @@ function StepReview({
 
       <div className="space-y-0 rounded-xl border p-2" style={{ borderColor: "var(--border)" }}>
         {[
-          ["Job Type", category || "Not set"],
+          ["Job Type", getCategoryLabel()],
           ["Title", title || "Untitled"],
           ["Timeline", timeline || "Not set"],
           ["Experience Level", experience || "Not set"],

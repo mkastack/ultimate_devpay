@@ -9,12 +9,13 @@ import { fmtGHS, initials } from "@/lib/hirer-format";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type ContractsSearch = { hire?: string };
+type ContractsSearch = { hire?: string; contract?: string };
 
 export const Route = createFileRoute("/client/contracts")({
   head: () => ({ meta: [{ title: "Contracts · DevPay Africa" }] }),
   validateSearch: (s: Record<string, unknown>): ContractsSearch => ({
     hire: typeof s.hire === "string" ? s.hire : undefined,
+    contract: typeof s.contract === "string" ? s.contract : undefined,
   }),
   component: ContractsPage,
 });
@@ -29,19 +30,34 @@ const STAGE_LABEL: Record<string, string> = {
 };
 
 function ContractsPage() {
-  const { hire } = Route.useSearch();
+  const { hire, contract } = Route.useSearch();
   const [confirm, setConfirm] = useState(false);
 
+  const isLiveContract = !!contract && !contract.startsWith("c");
+
   const liveQ = useQuery({
-    queryKey: ["contract", hire],
-    enabled: !!hire,
+    queryKey: ["contract", hire, contract],
+    enabled: !!hire || isLiveContract,
     queryFn: async () => {
-      const { data: c, error } = await supabase
-        .from("contracts")
-        .select("*")
-        .eq("hire_request_id", hire!)
-        .maybeSingle();
-      if (error) throw error;
+      let c = null;
+      if (hire) {
+        const { data, error } = await supabase
+          .from("contracts")
+          .select("*")
+          .eq("hire_request_id", hire)
+          .maybeSingle();
+        if (error) throw error;
+        c = data;
+      } else if (contract) {
+        const { data, error } = await supabase
+          .from("contracts")
+          .select("*")
+          .eq("id", contract)
+          .maybeSingle();
+        if (error) throw error;
+        c = data;
+      }
+
       if (!c) return null;
       const { data: e } = await supabase
         .from("escrow_accounts")
@@ -60,7 +76,13 @@ function ContractsPage() {
   }, [liveQ.data?.contract?.id]);
 
   const live = liveQ.data;
-  const mock = mockContracts[0];
+
+  const mock = useMemo(() => {
+    if (contract) {
+      return mockContracts.find((c) => c.id === contract) ?? mockContracts[0];
+    }
+    return mockContracts[0];
+  }, [contract]);
 
   const display = useMemo(() => {
     if (live?.contract) {
@@ -70,7 +92,11 @@ function ContractsPage() {
         amount: Number(live.contract.amount),
         platform_fee: Number(live.contract.platform_fee),
         deadline: live.contract.deadline ?? "",
-        milestones: (live.contract.milestones as any) ?? [],
+        milestones: ((live.contract.milestones as any) ?? []).map((m: any, idx: number) => ({
+          name: m.name,
+          amount: Number(m.amount),
+          status: m.status ?? (idx === 0 ? "active" : "pending") as "done" | "active" | "pending",
+        })),
         escrow_status: (live.escrow?.status ?? "pending") as string,
         escrow_amount: Number(live.escrow?.amount ?? live.contract.amount),
         created_at: live.escrow?.created_at ?? live.contract.created_at,
@@ -80,14 +106,31 @@ function ContractsPage() {
         refunded_at: live.escrow?.refunded_at ?? null,
       };
     }
+
+    // Build mock milestones dynamically based on selected mock contract
+    const mCount = mock.milestone_total ?? 4;
+    const mCurrent = mock.milestone_current ?? 2;
+    const mAmount = mock.contract_amount / mCount;
+    const mockMilestones = Array.from({ length: mCount }).map((_, idx) => {
+      const num = idx + 1;
+      let mStatus: "done" | "active" | "pending" = "pending";
+      if (num < mCurrent) mStatus = "done";
+      else if (num === mCurrent) mStatus = "active";
+      return {
+        name: num === mCurrent ? mock.milestone_label : `Milestone ${num}`,
+        amount: mAmount,
+        status: mStatus,
+      };
+    });
+
     return {
       job_title: mock.job_title,
       developer_name: mock.developer.name,
       amount: mock.contract_amount,
       platform_fee: mock.contract_amount * 0.04,
       deadline: "May 29, 2026",
-      milestones: [] as Array<{ name: string; amount: number; due_days: number }>,
-      escrow_status: "locked",
+      milestones: mockMilestones,
+      escrow_status: mock.escrow_status === "holding" ? "locked" : mock.escrow_status === "released" ? "released" : "locked",
       escrow_amount: mock.escrow_amount,
       created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
       funded_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
@@ -98,6 +141,10 @@ function ContractsPage() {
   }, [live, mock]);
 
   const stageIdx = Math.max(0, ESCROW_STAGES.indexOf(display.escrow_status as any));
+
+  const activeMilestone = useMemo(() => {
+    return display.milestones.find((m: any) => m.status === "active");
+  }, [display.milestones]);
 
   return (
     <>
@@ -201,25 +248,16 @@ function ContractsPage() {
       </div>
 
       <div className="mt-3 space-y-3">
-        {display.milestones.length > 0 ? (
-          display.milestones.map((m: any, i: number) => (
-            <Milestone
-              key={i}
-              num={i + 1}
-              title={m.name}
-              amount={Number(m.amount)}
-              status={i === 0 ? "active" : "pending"}
-              onApprove={i === 0 ? () => setConfirm(true) : undefined}
-            />
-          ))
-        ) : (
-          <>
-            <Milestone num={1} title="Initial setup & auth" amount={2250} status="done" />
-            <Milestone num={2} title="API integration & charts" amount={2250} status="active" onApprove={() => setConfirm(true)} />
-            <Milestone num={3} title="Reports module" amount={2250} status="pending" />
-            <Milestone num={4} title="Handover & polish" amount={2250} status="pending" />
-          </>
-        )}
+        {display.milestones.map((m: any, i: number) => (
+          <Milestone
+            key={i}
+            num={i + 1}
+            title={m.name}
+            amount={Number(m.amount)}
+            status={m.status}
+            onApprove={m.status === "active" ? () => setConfirm(true) : undefined}
+          />
+        ))}
       </div>
 
       <div className="mt-8 text-center">
@@ -228,7 +266,13 @@ function ContractsPage() {
         </button>
       </div>
 
-      {confirm && <ApproveModal onCancel={() => setConfirm(false)} amount={2250} developer={display.developer_name} />}
+      {confirm && activeMilestone && (
+        <ApproveModal
+          onCancel={() => setConfirm(false)}
+          amount={activeMilestone.amount}
+          developer={display.developer_name}
+        />
+      )}
     </>
   );
 }

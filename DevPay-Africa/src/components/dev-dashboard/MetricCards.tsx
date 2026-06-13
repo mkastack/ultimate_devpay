@@ -35,7 +35,7 @@ function Card({ m }: { m: Metric }) {
           <Icon className="h-4 w-4" style={{ color: m.iconColor }} />
         </div>
       </div>
-      <div className={`mt-3 font-mono-nums text-[34px] font-bold leading-none ${m.valueClass ?? "text-white"}`}>
+      <div className={`mt-3 font-mono-nums text-[26px] xs:text-[34px] font-bold leading-none ${m.valueClass ?? "text-white"}`}>
         {m.value}
       </div>
       {m.secondary && (
