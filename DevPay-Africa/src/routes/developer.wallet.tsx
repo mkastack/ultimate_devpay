@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Lock, Smartphone, Wallet as WalletIcon, Download, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowDownLeft, ArrowUpRight, Lock, Smartphone, Wallet as WalletIcon, Download, CheckCircle2, Loader2 } from "lucide-react";
 import { DevDashboardHeader } from "@/components/dev-dashboard/Header";
 import { fmtUSD, fmtGHS } from "@/lib/dev-mock-data";
 import {
@@ -11,6 +11,9 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/integrations/supabase/auth-context";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/developer/wallet")({
   head: () => ({ meta: [{ title: "Wallet — DevPay Africa" }] }),
@@ -29,15 +32,6 @@ interface Transaction {
   date: string;
 }
 
-const INITIAL_TXS: Transaction[] = [
-  { id: "t1", type: "escrow_release", label: "Milestone 2 released", sub: "Speedaf logistics tracker", usd: 450, status: "completed", date: "Today, 14:02" },
-  { id: "t2", type: "payout", label: "MoMo withdrawal", sub: "MTN MoMo · ••••2341", usd: 800, status: "completed", date: "Yesterday, 09:11" },
-  { id: "t3", type: "escrow_hold", label: "Escrow funded", sub: "Zeepay design system", usd: 1200, status: "completed", date: "Mon, 16:48" },
-  { id: "t4", type: "fee", label: "Platform fee", sub: "5% on milestone 1", usd: 22.5, status: "completed", date: "Mon, 16:48" },
-  { id: "t5", type: "escrow_release", label: "Milestone 1 released", sub: "Hubtel merchant dashboard", usd: 600, status: "completed", date: "Last week" },
-  { id: "t6", type: "payout", label: "MoMo withdrawal", sub: "Vodafone Cash · ••••8812", usd: 350, status: "pending", date: "Last week" },
-];
-
 const meta: Record<TxType, { icon: any; color: string; sign: "+" | "-" }> = {
   escrow_release: { icon: ArrowDownLeft, color: "var(--cyan-brand)", sign: "+" },
   payout: { icon: ArrowUpRight, color: "#F87171", sign: "-" },
@@ -47,11 +41,17 @@ const meta: Record<TxType, { icon: any; color: string; sign: "+" | "-" }> = {
 };
 
 function WalletPage() {
-  const [balance, setBalance] = useState(1247.5);
-  const [pending] = useState(320);
-  const [lifetime, setLifetime] = useState(8420);
-  const [txList, setTxList] = useState<Transaction[]>(INITIAL_TXS);
+  const { session, loading: authLoading } = useAuth();
+  const userId = session?.user?.id;
+
+  const [loading, setLoading] = useState(true);
+  const [balance, setBalance] = useState(0);
+  const [pending, setPending] = useState(0);
+  const [lifetime, setLifetime] = useState(0);
+  const [txList, setTxList] = useState<Transaction[]>([]);
   const [filter, setFilter] = useState("All");
+
+  const [walletRow, setWalletRow] = useState<any>(null);
 
   // Dialog states
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -60,11 +60,122 @@ function WalletPage() {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawError, setWithdrawError] = useState("");
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
+  const [withdrawInProgress, setWithdrawInProgress] = useState(false);
 
   const [statementOpen, setStatementOpen] = useState(false);
   const [statementMonth, setStatementMonth] = useState("June 2026");
 
-  const handleWithdrawSubmit = (e: React.FormEvent) => {
+  const fetchData = async () => {
+    if (!userId) return;
+    try {
+      // 1. Fetch wallet
+      let walletData = null;
+      const { data: byUserId, error: errUserId } = await supabase
+        .from("wallets")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!errUserId && byUserId) {
+        walletData = byUserId;
+      } else {
+        const { data: byId } = await supabase
+          .from("wallets")
+          .select("*")
+          .eq("id", userId)
+          .maybeSingle();
+        if (byId) {
+          walletData = byId;
+        }
+      }
+
+      if (walletData) {
+        setWalletRow(walletData);
+        const balKey = Object.keys(walletData).find(k => ["balance", "balance_usd", "available_balance", "balanceusd"].includes(k.toLowerCase()));
+        const pendKey = Object.keys(walletData).find(k => ["pending", "pending_balance", "pending_amount", "pendingamount"].includes(k.toLowerCase()));
+        const lifeKey = Object.keys(walletData).find(k => ["lifetime", "lifetime_earned", "lifetimeearned"].includes(k.toLowerCase()));
+
+        setBalance(Number(balKey ? walletData[balKey] : 0));
+        setPending(Number(pendKey ? walletData[pendKey] : 0));
+        setLifetime(Number(lifeKey ? walletData[lifeKey] : 0));
+      }
+
+      // 2. Fetch transactions
+      const { data: txData, error: txError } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (txError) throw txError;
+
+      const mappedTxs: Transaction[] = (txData || []).map((t: any) => {
+        const rawType = (t.type || "").toLowerCase();
+        let type: TxType = "escrow_release";
+        if (rawType.includes("release") || rawType === "income") type = "escrow_release";
+        else if (rawType.includes("payout") || rawType.includes("withdraw")) type = "payout";
+        else if (rawType.includes("hold") || rawType.includes("escrow")) type = "escrow_hold";
+        else if (rawType.includes("fee")) type = "fee";
+        else if (rawType.includes("deposit")) type = "deposit";
+
+        return {
+          id: t.id || String(Math.random()),
+          type,
+          label: t.label || t.description || (type === "payout" ? "MoMo withdrawal" : "Transaction"),
+          sub: t.sub || (t.description && t.description !== t.label ? t.description : "") || (type === "payout" ? "MTN MoMo" : "Processed"),
+          usd: Number(t.amount ?? t.usd ?? t.usd_amount ?? 0),
+          status: t.status === "pending" ? "pending" : "completed",
+          date: t.created_at ? new Date(t.created_at).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+          }) : "Just now",
+        };
+      });
+
+      setTxList(mappedTxs);
+
+      if (walletData && !walletData.lifetime && !walletData.lifetime_earned && !walletData.lifetimeearned) {
+        const calculatedLifetime = mappedTxs
+          .filter(t => t.type === "escrow_release" || t.type === "deposit")
+          .reduce((sum, t) => sum + t.usd, 0);
+        setLifetime(calculatedLifetime);
+      }
+    } catch (err) {
+      console.error("[wallet] load error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
+    fetchData();
+
+    // Subscribe to transactions
+    const ch = supabase
+      .channel("wallet-transactions-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "transactions", filter: `user_id=eq.${userId}` },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [userId, authLoading]);
+
+  const handleWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setWithdrawError("");
 
@@ -84,29 +195,53 @@ function WalletPage() {
       return;
     }
 
-    // Success action
-    setBalance((prev) => prev - amountUSD);
-    const providerName = provider === "mtn" ? "MTN MoMo" : provider === "telecel" ? "Telecel Cash" : "AirtelTigo Money";
-    const last4 = momoNumber.slice(-4);
+    setWithdrawInProgress(true);
 
-    const newTx: Transaction = {
-      id: `t-new-${Date.now()}`,
-      type: "payout",
-      label: "MoMo withdrawal",
-      sub: `${providerName} · ••••${last4}`,
-      usd: amountUSD,
-      status: "completed",
-      date: "Just now",
-    };
+    try {
+      const providerName = provider === "mtn" ? "MTN MoMo" : provider === "telecel" ? "Telecel Cash" : "AirtelTigo Money";
+      const last4 = momoNumber.slice(-4);
+      const description = `MoMo withdrawal to ${providerName} · ••••${last4}`;
 
-    setTxList((prev) => [newTx, ...prev]);
-    setWithdrawSuccess(true);
-    setWithdrawAmount("");
+      // Insert transaction
+      const { error: txError } = await supabase.from("transactions").insert({
+        user_id: userId,
+        amount: amountUSD,
+        type: "payout",
+        description: description,
+        status: "completed"
+      });
+
+      if (txError) throw txError;
+
+      // Update wallet balance
+      if (walletRow) {
+        const balKey = Object.keys(walletRow).find(k => ["balance", "balance_usd", "available_balance", "balanceusd"].includes(k.toLowerCase())) || "balance";
+        const newBalance = balance - amountUSD;
+        const keyField = walletRow.user_id ? "user_id" : "id";
+
+        const { error: walletUpdateErr } = await supabase
+          .from("wallets")
+          .update({ [balKey]: newBalance })
+          .eq(keyField, userId);
+
+        if (walletUpdateErr) throw walletUpdateErr;
+      }
+
+      setWithdrawSuccess(true);
+      setWithdrawAmount("");
+      toast.success("Withdrawal completed");
+      fetchData();
+    } catch (err: any) {
+      console.error("[withdrawal] failed:", err);
+      setWithdrawError(err.message || "Failed to process withdrawal. Please try again.");
+      toast.error("Withdrawal failed");
+    } finally {
+      setWithdrawInProgress(false);
+    }
   };
 
   const handleDownloadStatement = () => {
     setStatementOpen(false);
-    // Simulate statement file download
     const element = document.createElement("a");
     const file = new Blob([`DevPay Africa Statement - ${statementMonth}\nBalance: ${fmtGHS(balance)} (${fmtUSD(balance)})\n\nTransactions:\n` + 
       txList.map(t => `${t.date} - ${t.label} (${t.sub}): - $${t.usd}`).join("\n")
@@ -125,6 +260,14 @@ function WalletPage() {
     if (filter === "Fees") return t.type === "fee";
     return true;
   });
+
+  if (loading || authLoading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[color:var(--cyan-brand)]" />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -344,14 +487,23 @@ function WalletPage() {
                   type="button"
                   onClick={() => setWithdrawOpen(false)}
                   className="h-11 rounded-lg border border-[var(--color-border)] px-4 text-sm font-semibold text-[color:var(--text-secondary)] hover:bg-[var(--surface-hover)]"
+                  disabled={withdrawInProgress}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="h-11 rounded-lg bg-[color:var(--cyan-brand)] text-[color:var(--background)] px-5 text-sm font-semibold hover:shadow-cyan transition-shadow"
+                  className="h-11 rounded-lg bg-[color:var(--cyan-brand)] text-[color:var(--background)] px-5 text-sm font-semibold hover:shadow-cyan transition-shadow flex items-center justify-center gap-2"
+                  disabled={withdrawInProgress}
                 >
-                  Confirm Withdrawal
+                  {withdrawInProgress ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    "Confirm Withdrawal"
+                  )}
                 </button>
               </DialogFooter>
             </form>
@@ -408,4 +560,4 @@ function WalletPage() {
       </Dialog>
     </>
   );
-}
+}
