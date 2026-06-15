@@ -19,9 +19,9 @@ export function ContractsRow() {
             {contracts.length}
           </span>
         </div>
-        <button className="text-[13px] text-[color:var(--cyan-brand)] hover:underline" type="button">
+        <Link to="/developer/contracts" className="text-[13px] text-[color:var(--cyan-brand)] hover:underline">
           View all →
-        </button>
+        </Link>
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
@@ -30,7 +30,7 @@ export function ContractsRow() {
           return (
           <article
             key={c.id}
-            className="relative w-[340px] shrink-0 snap-start overflow-hidden rounded-2xl transition-all duration-200 hover:-translate-y-[3px]"
+            className="relative w-[285px] sm:w-[340px] shrink-0 snap-start overflow-hidden rounded-2xl transition-all duration-200 hover:-translate-y-[3px]"
             style={{
               background: "var(--surface)",
               border: "1px solid var(--color-border)",
@@ -110,12 +110,13 @@ export function ContractsRow() {
                 >
                   <MessageCircle className="h-3.5 w-3.5" /> Message
                 </Link>
-                <button
-                  type="button"
+                <Link
+                  to="/developer/contracts"
+                  search={{ contract: c.id }}
                   className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[color:var(--cyan-brand)] text-[13px] font-semibold text-[color:var(--background)] transition-all hover:scale-[1.02] hover:shadow-cyan active:scale-[0.98]"
                 >
                   View Contract <ArrowRight className="h-3.5 w-3.5" />
-                </button>
+                </Link>
               </div>
             </div>
           </article>

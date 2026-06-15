@@ -12,7 +12,7 @@ type UploadPayload = {
 };
 
 export const uploadLogo = createServerFn({ method: "POST" })
-  .validator((data: UploadPayload) => data)
+  .inputValidator((data: UploadPayload) => data)
   .handler(async ({ data }) => {
     const dataUrl = `data:${data.mime};base64,${data.data_b64}`;
     return { url: dataUrl };

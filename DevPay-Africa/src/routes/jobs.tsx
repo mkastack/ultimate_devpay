@@ -1,13 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
+import { PublicJobCard } from "@/components/PublicJobCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Search, MapPin, Clock, Loader2, Briefcase, Star, Filter, ShieldCheck, DollarSign, Calendar, SlidersHorizontal, Tag } from "lucide-react";
+import {
+  Search,
+  Loader2,
+  Briefcase,
+  SlidersHorizontal,
+  Tag,
+  Sparkles,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/integrations/supabase/auth-context";
 import { useJobStore } from "@/lib/stores/job-store";
+import { showcaseJobs, type PublicJobListing } from "@/lib/public-jobs-showcase";
+import { JobPreviewDialog } from "@/components/JobPreviewDialog";
 import { z } from "zod";
 
 const jobSearchSchema = z.object({
@@ -36,32 +45,22 @@ type JobRow = {
   client_id: string;
 };
 
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const h = Math.floor(diff / 36e5);
-  if (h < 1) return "just now";
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
-
-// Predefined lists for robust filtering
-const categoriesList = ["All", "Web Dev", "Mobile Apps", "UI/UX Design", "Cloud Engineering", "Data Science", "Security", "Web3"];
+const categoriesList = ["All", "Web Dev", "Mobile Apps", "Fintech", "UI/UX Design", "Cloud Engineering", "Data Science", "Security", "Web3"];
 const budgetsList = [
   { label: "All Budgets", value: "all" },
   { label: "Under $1,000", value: "under-1k" },
   { label: "$1,000 – $5,000", value: "1k-5k" },
   { label: "$5,000 – $10,000", value: "5k-10k" },
-  { label: "$10,000+", value: "10k-plus" }
+  { label: "$10,000+", value: "10k-plus" },
 ];
 const timelinesList = [
   { label: "All Timelines", value: "all" },
   { label: "Under 1 Month", value: "under-1m" },
   { label: "1 to 3 Months", value: "1m-3m" },
-  { label: "3+ Months", value: "3m-plus" }
+  { label: "3+ Months", value: "3m-plus" },
 ];
 const topSkills = ["React", "TypeScript", "Node.js", "Solidity", "Supabase", "React Native", "Flutter", "Python", "UI/UX", "Docker"];
 
-// Helper to dynamically extract matching skills based on job description & title
 function extractSkills(title: string, desc: string | null): string[] {
   const text = `${title} ${desc ?? ""}`.toLowerCase();
   const list: string[] = [];
@@ -75,15 +74,47 @@ function extractSkills(title: string, desc: string | null): string[] {
   if (text.includes("python") || text.includes("django")) list.push("Python");
   if (text.includes("ui") || text.includes("ux") || text.includes("design") || text.includes("figma")) list.push("UI/UX");
   if (text.includes("docker") || text.includes("aws") || text.includes("cloud")) list.push("Docker");
-  
-  // Return extracted skills, or a default list if none found
   return list.length > 0 ? list : ["Full Stack", "API Integration"];
+}
+
+function inferCategory(title: string, desc: string | null): string {
+  const text = `${title} ${desc ?? ""}`.toLowerCase();
+  if (text.includes("mobile") || text.includes("flutter") || text.includes("react native")) return "Mobile Apps";
+  if (text.includes("design") || text.includes("figma") || text.includes("ui")) return "UI/UX Design";
+  if (text.includes("cloud") || text.includes("aws") || text.includes("docker")) return "Cloud Engineering";
+  if (text.includes("solidity") || text.includes("web3")) return "Web3";
+  if (text.includes("security") || text.includes("audit")) return "Security";
+  return "Web Dev";
+}
+
+function rowToListing(j: JobRow): PublicJobListing {
+  const skills = extractSkills(j.title, j.description);
+  return {
+    id: j.id,
+    title: j.title,
+    description: j.description ?? "No description provided.",
+    budget_min: j.budget_min ?? 0,
+    budget_max: j.budget_max ?? j.budget_min ?? 0,
+    currency: j.currency ?? "USD",
+    duration: j.duration ?? "Flexible",
+    status: j.status,
+    created_at: j.created_at,
+    client_id: j.client_id,
+    clientName: "Verified Hirer",
+    clientVerified: true,
+    location: "Remote",
+    category: inferCategory(j.title, j.description),
+    experienceLevel: "Intermediate",
+    skills,
+    proposalsCount: Math.floor(Math.random() * 12) + 2,
+  };
 }
 
 function Jobs() {
   const { profile } = useAuth();
-  const [jobs, setJobs] = useState<JobRow[]>([]);
+  const [dbJobs, setDbJobs] = useState<JobRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewJob, setPreviewJob] = useState<PublicJobListing | null>(null);
 
   const { category: queryCategory, search: querySearch, budget_min, budget_max } = Route.useSearch();
   const { setFilter } = useJobStore();
@@ -95,7 +126,6 @@ function Jobs() {
     if (budget_max) setFilter("budget_max", budget_max);
   }, [queryCategory, querySearch, budget_min, budget_max, setFilter]);
 
-  // Search & Filter state
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("All");
   const [budgetRange, setBudgetRange] = useState("all");
@@ -111,14 +141,19 @@ function Jobs() {
       .order("created_at", { ascending: false })
       .limit(100)
       .then(({ data }) => {
-        setJobs((data as JobRow[]) ?? []);
+        setDbJobs((data as JobRow[]) ?? []);
         setLoading(false);
       });
   }, []);
 
+  const usingPreview = dbJobs.length === 0;
+  const sourceJobs: PublicJobListing[] = usingPreview
+    ? showcaseJobs
+    : dbJobs.map(rowToListing);
+
   const toggleSkill = (skill: string) => {
-    setSelectedSkills(prev => 
-      prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]
+    setSelectedSkills((prev) =>
+      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill],
     );
   };
 
@@ -130,85 +165,70 @@ function Jobs() {
     setSelectedSkills([]);
   };
 
-  // Perform client-side filter computation
   const filtered = useMemo(() => {
-    return jobs.filter((j) => {
-      const skills = extractSkills(j.title, j.description);
-      const text = `${j.title} ${j.description ?? ""}`.toLowerCase();
+    return sourceJobs.filter((j) => {
+      const text = `${j.title} ${j.description}`.toLowerCase();
 
-      // Search query
-      if (q && !j.title.toLowerCase().includes(q.toLowerCase()) && !j.description?.toLowerCase().includes(q.toLowerCase())) {
-        return false;
-      }
+      if (q && !text.includes(q.toLowerCase())) return false;
 
-      // Category filter
-      if (category !== "All") {
-        const cat = category.toLowerCase();
-        if (cat === "web dev" && !text.includes("web") && !text.includes("react") && !text.includes("next")) return false;
-        if (cat === "mobile apps" && !text.includes("mobile") && !text.includes("native") && !text.includes("flutter")) return false;
-        if (cat === "ui/ux design" && !text.includes("design") && !text.includes("ui") && !text.includes("ux")) return false;
-        if (cat === "cloud engineering" && !text.includes("cloud") && !text.includes("aws") && !text.includes("docker")) return false;
-        if (cat === "web3" && !text.includes("solidity") && !text.includes("web3") && !text.includes("crypto")) return false;
-      }
+      if (category !== "All" && j.category !== category) return false;
 
-      // Budget Range filter
       if (budgetRange !== "all") {
-        const maxBudget = j.budget_max ?? j.budget_min ?? 0;
+        const maxBudget = j.budget_max || j.budget_min;
         if (budgetRange === "under-1k" && maxBudget >= 1000) return false;
         if (budgetRange === "1k-5k" && (maxBudget < 1000 || maxBudget > 5000)) return false;
         if (budgetRange === "5k-10k" && (maxBudget < 5000 || maxBudget > 10000)) return false;
         if (budgetRange === "10k-plus" && maxBudget < 10000) return false;
       }
 
-      // Timeline/Duration filter
       if (timeline !== "all") {
-        const durationText = (j.duration ?? "").toLowerCase();
-        if (timeline === "under-1m" && !durationText.includes("month") && !durationText.includes("week")) return false;
-        if (timeline === "1m-3m" && !durationText.includes("1") && !durationText.includes("2") && !durationText.includes("3") && durationText.includes("month")) return false;
-        if (timeline === "3m-plus" && !durationText.includes("3") && !durationText.includes("6") && !durationText.includes("year")) return false;
+        const durationText = j.duration.toLowerCase();
+        if (timeline === "under-1m" && !durationText.includes("week") && durationText.includes("month")) return false;
+        if (timeline === "1m-3m" && !durationText.match(/[1-3].*month/)) return false;
+        if (timeline === "3m-plus" && !durationText.includes("month") && !durationText.includes("year")) return false;
       }
 
-      // Skills tags filter
       if (selectedSkills.length > 0) {
-        const matchesSkill = selectedSkills.some(s => skills.includes(s));
-        if (!matchesSkill) return false;
+        if (!selectedSkills.some((s) => j.skills.includes(s))) return false;
       }
 
       return true;
     });
-  }, [jobs, q, category, budgetRange, timeline, selectedSkills]);
+  }, [sourceJobs, q, category, budgetRange, timeline, selectedSkills]);
+
+  const hasActiveFilters =
+    q || category !== "All" || budgetRange !== "all" || timeline !== "all" || selectedSkills.length > 0;
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-background">
-      {/* Decorative gradient blur background */}
-      <div className="absolute top-0 left-1/4 -z-10 w-96 h-96 rounded-full bg-primary/5 blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 -z-10 w-96 h-96 rounded-full bg-accent/5 blur-[100px] pointer-events-none" />
+    <div className="relative min-h-screen overflow-hidden bg-background">
+      <div className="pointer-events-none absolute left-1/4 top-0 -z-10 h-96 w-96 rounded-full bg-primary/5 blur-[100px]" />
+      <div className="pointer-events-none absolute bottom-1/4 right-1/4 -z-10 h-96 w-96 rounded-full bg-accent/5 blur-[100px]" />
 
       <SiteHeader />
 
-      <div className="container mx-auto px-4 py-10 max-w-6xl">
-        {/* Page Title & Post Job Button */}
+      <div className="container mx-auto max-w-6xl px-4 py-10">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="font-display text-4xl font-black tracking-tight">
               Find your next <span className="text-gradient-brand">project</span>
             </h1>
-            <p className="text-muted-foreground mt-2 text-sm">Escrow-protected high-quality gigs from global hirers.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Escrow-protected high-quality gigs from global hirers.
+            </p>
           </div>
           {profile?.role === "client" && (
-            <Button asChild className="bg-[image:var(--gradient-primary)] text-primary-foreground hover:opacity-95 shadow-[var(--shadow-glow)]">
+            <Button asChild className="bg-[image:var(--gradient-primary)] text-primary-foreground shadow-[var(--shadow-glow)] hover:opacity-95">
               <Link to="/client/post-job">Post a job</Link>
             </Button>
           )}
         </div>
 
-        {/* Unified Search & Filters Glass Card */}
-        <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xl p-5 mb-8 shadow-lg space-y-4">
+        <div className="mb-8 space-y-4 rounded-2xl border border-border/60 bg-card/60 p-5 shadow-lg backdrop-blur-xl">
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="pl-10 h-12 bg-surface/50 border-border/40 focus-visible:ring-1 focus-visible:ring-primary"
+                className="h-12 border-border/40 bg-surface/50 pl-10 focus-visible:ring-1 focus-visible:ring-primary"
                 placeholder="Search jobs by keyword, role title, skills..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -217,57 +237,51 @@ function Jobs() {
             <Button
               onClick={() => setShowFilters(!showFilters)}
               variant="outline"
-              className={`h-12 border-border/60 ${showFilters ? "bg-primary/10 text-primary border-primary/20" : ""}`}
+              className={`h-12 border-border/60 ${showFilters ? "border-primary/20 bg-primary/10 text-primary" : ""}`}
             >
-              <SlidersHorizontal className="h-4 w-4 mr-2" /> Filters
+              <SlidersHorizontal className="mr-2 h-4 w-4" /> Filters
             </Button>
-            {(q || category !== "All" || budgetRange !== "all" || timeline !== "all" || selectedSkills.length > 0) && (
+            {hasActiveFilters && (
               <Button onClick={clearFilters} variant="ghost" className="h-12 text-xs text-muted-foreground hover:text-foreground">
                 Reset
               </Button>
             )}
           </div>
 
-          {/* Advanced Dropdown Filters (Collapsible) */}
           {(showFilters || category !== "All" || budgetRange !== "all" || timeline !== "all") && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-border/30">
-              {/* Category selector */}
+            <div className="grid grid-cols-1 gap-4 border-t border-border/30 pt-3 md:grid-cols-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Category</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-border/60 bg-surface px-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="h-10 w-full rounded-lg border border-border/60 bg-surface px-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary"
                 >
-                  {categoriesList.map(c => (
+                  {categoriesList.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
-
-              {/* Budget selector */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Budget Range</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Budget Range</label>
                 <select
                   value={budgetRange}
                   onChange={(e) => setBudgetRange(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-border/60 bg-surface px-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="h-10 w-full rounded-lg border border-border/60 bg-surface px-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary"
                 >
-                  {budgetsList.map(b => (
+                  {budgetsList.map((b) => (
                     <option key={b.value} value={b.value}>{b.label}</option>
                   ))}
                 </select>
               </div>
-
-              {/* Timeline selector */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Duration / Timeline</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Duration / Timeline</label>
                 <select
                   value={timeline}
                   onChange={(e) => setTimeline(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-border/60 bg-surface px-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="h-10 w-full rounded-lg border border-border/60 bg-surface px-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary"
                 >
-                  {timelinesList.map(t => (
+                  {timelinesList.map((t) => (
                     <option key={t.value} value={t.value}>{t.label}</option>
                   ))}
                 </select>
@@ -275,9 +289,8 @@ function Jobs() {
             </div>
           )}
 
-          {/* Clickable Skill Badges */}
           <div className="pt-2">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+            <div className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               <Tag className="h-3 w-3" /> Filter by Core Skills
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -286,11 +299,12 @@ function Jobs() {
                 return (
                   <button
                     key={skill}
+                    type="button"
                     onClick={() => toggleSkill(skill)}
-                    className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-all ${
+                    className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-all ${
                       active
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-surface hover:bg-surface/80 border-border/60 text-muted-foreground"
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border/60 bg-surface text-muted-foreground hover:bg-surface/80"
                     }`}
                   >
                     {skill}
@@ -301,99 +315,56 @@ function Jobs() {
           </div>
         </div>
 
-        {/* Main Grid View */}
+        {usingPreview && !loading && (
+          <div className="mb-6 flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
+            <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+            <span>
+              Showing <strong className="text-foreground">sample listings</strong> — post a job or connect live data to replace these previews.
+            </span>
+          </div>
+        )}
+
+        {!usingPreview && filtered.length > 0 && (
+          <p className="mb-5 text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">{filtered.length}</span> open{" "}
+            {filtered.length === 1 ? "role" : "roles"} available
+          </p>
+        )}
+
         {loading ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-border/60 bg-card/40 p-16 text-center">
-            <Briefcase className="h-12 w-12 mx-auto text-muted-foreground/40 animate-pulse" />
-            <h3 className="font-display text-xl font-bold mt-4">No jobs found</h3>
-            <p className="text-sm text-muted-foreground mt-2 max-w-sm mx-auto">
-              We couldn't find any matches. Try modifying your search keywords or clearing the active filters.
+            <Briefcase className="mx-auto h-12 w-12 animate-pulse text-muted-foreground/40" />
+            <h3 className="mt-4 font-display text-xl font-bold">No jobs found</h3>
+            <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
+              We couldn&apos;t find any matches. Try modifying your search keywords or clearing the active filters.
             </p>
             <Button onClick={clearFilters} className="mt-5 border border-border">
               Clear All Filters
             </Button>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 gap-5">
-            {filtered.map((j) => {
-              const skills = extractSkills(j.title, j.description);
-              // Clients have average star rating representation
-              const clientRating = (4.8 + (Math.random() * 0.2)).toFixed(1);
-
-              return (
-                <Link
-                  key={j.id}
-                  to="/jobs/$jobId"
-                  params={{ jobId: j.id }}
-                  className="group rounded-2xl border border-border/60 bg-card/80 p-6 flex flex-col justify-between hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgb(0,0,0,0.15)] transition-all block text-left"
-                >
-                  <div className="space-y-3">
-                    {/* Header */}
-                    <div className="flex justify-between items-start gap-4">
-                      <h3 className="font-display text-lg font-bold group-hover:text-primary transition-colors line-clamp-1 leading-snug">
-                        {j.title}
-                      </h3>
-                      <div className="text-primary font-display font-extrabold text-lg shrink-0 flex items-center">
-                        <DollarSign className="h-4 w-4 shrink-0 -mr-0.5" />
-                        {j.budget_min ? j.budget_min.toLocaleString() : "—"}{j.budget_max ? ` – $${j.budget_max.toLocaleString()}` : ""}
-                      </div>
-                    </div>
-
-                    {/* Meta data row */}
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />Remote</span>
-                      <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{timeAgo(j.created_at)}</span>
-                      {j.duration && <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{j.duration}</span>}
-                    </div>
-
-                    {/* Escrow safety badge */}
-                    <div className="text-[10px] text-emerald-500 font-semibold flex items-center gap-1 bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/15 w-fit">
-                      <ShieldCheck className="h-3 w-3" /> Escrow Safe Guaranteed
-                    </div>
-
-                    {/* Description */}
-                    {j.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed py-1">
-                        {j.description}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Footer tags and rating */}
-                  <div className="mt-5 pt-4 border-t border-border/30 flex items-center justify-between gap-4">
-                    {/* Skills tags list */}
-                    <div className="flex flex-wrap gap-1 max-w-[70%]">
-                      {skills.slice(0, 3).map(s => (
-                        <Badge key={s} variant="secondary" className="text-[10px] px-2 py-0 bg-primary/5 text-primary border border-primary/10 rounded">
-                          {s}
-                        </Badge>
-                      ))}
-                      {skills.length > 3 && (
-                        <span className="text-[10px] text-muted-foreground flex items-center">+{skills.length - 3} more</span>
-                      )}
-                    </div>
-
-                    {/* Client Rating & Button */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="flex items-center text-xs text-muted-foreground gap-0.5">
-                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                        <span className="font-semibold text-foreground">{clientRating}</span>
-                      </div>
-                      <span className="text-xs font-semibold text-primary group-hover:underline flex items-center gap-0.5">
-                        Apply →
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
+          <div className="grid gap-5 md:grid-cols-2">
+            {filtered.map((j) => (
+              <PublicJobCard
+                key={j.id}
+                job={j}
+                isPreview={usingPreview}
+                onDeveloperPreview={setPreviewJob}
+              />
+            ))}
           </div>
         )}
       </div>
+
+      <JobPreviewDialog
+        open={!!previewJob}
+        onOpenChange={(v) => !v && setPreviewJob(null)}
+        job={previewJob}
+      />
     </div>
   );
 }

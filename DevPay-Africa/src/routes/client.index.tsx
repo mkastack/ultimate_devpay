@@ -1,5 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { TopBar } from "@/components/hirer-dashboard/TopBar";
+import { HireDialog, type HireTarget } from "@/components/hirer-dashboard/HireDialog";
+import { DeveloperProfileDialog } from "@/components/hirer-dashboard/DeveloperProfileDialog";
+import { getHirerDeveloper, getHirerDeveloperByName, type HirerDeveloper } from "@/lib/hirer-developer-catalog";
+import { hireTargetFromDeveloper, hireTargetFromProposal } from "@/lib/hirer-hire-flow";
 import {
   CreditCard, Layers, Users as UsersIcon, Briefcase, ArrowRight,
   Lock, Sparkles, Star, MessageCircle, CheckCircle2,
@@ -17,9 +22,26 @@ export const Route = createFileRoute("/client/")({
 });
 
 function OverviewPage() {
+  const navigate = useNavigate();
   const today = new Date().toLocaleDateString("en-GB", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
+  const [hireTarget, setHireTarget] = useState<HireTarget | null>(null);
+  const [hireOpen, setHireOpen] = useState(false);
+  const [profileDev, setProfileDev] = useState<HirerDeveloper | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const openHire = (target: HireTarget) => {
+    setHireTarget(target);
+    setHireOpen(true);
+  };
+
+  const openProfileByName = (name: string) => {
+    const dev = getHirerDeveloperByName(name);
+    if (!dev) return;
+    setProfileDev(dev);
+    setProfileOpen(true);
+  };
 
   return (
     <>
@@ -28,9 +50,24 @@ function OverviewPage() {
       <MetricCards />
       <PostJobBanner small={client.jobs_posted > 0} />
       <ActiveContractsSection />
-      <ProposalsSection />
-      <RecommendedDevelopersSection />
+      <ProposalsSection onHire={openHire} onViewProfile={openProfileByName} />
+      <RecommendedDevelopersSection
+        onHire={(dev) => openHire(hireTargetFromDeveloper(dev))}
+        onViewProfile={(dev) => { setProfileDev(dev); setProfileOpen(true); }}
+      />
       <BottomRow />
+      <HireDialog
+        open={hireOpen}
+        onOpenChange={setHireOpen}
+        target={hireTarget}
+        onSuccess={(r) => navigate({ to: "/client/contracts", search: { hire: r.hire_id } as any })}
+      />
+      <DeveloperProfileDialog
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        developer={profileDev}
+        onHire={profileDev ? () => openHire(hireTargetFromDeveloper(profileDev)) : undefined}
+      />
     </>
   );
 }
@@ -257,10 +294,33 @@ function ActiveContractsSection() {
 }
 
 function ContractCard({ c }: { c: typeof contracts[number] }) {
+  const navigate = useNavigate();
+  const [contractState, setContractState] = useState(c);
+  const [isApproving, setIsApproving] = useState(false);
+
+  const handleMessage = () => {
+    navigate({ to: "/client/messages" });
+  };
+
+  const handleApprove = () => {
+    setIsApproving(true);
+    setTimeout(() => {
+      setIsApproving(false);
+      setContractState((prev) => ({
+        ...prev,
+        status: "active" as const,
+        awaiting_approval: false,
+        paid_amount: prev.paid_amount + prev.escrow_amount,
+        escrow_status: "released" as const,
+      }));
+      alert(`Milestone approved successfully! GHS ${contractState.escrow_amount.toLocaleString()} has been released to ${contractState.developer.name}.`);
+    }, 1000);
+  };
+
   const stripColor =
-    c.status === "active" ? "var(--cyan)"
-    : c.status === "review" ? "#818CF8"
-    : c.status === "disputed" ? "var(--destructive)"
+    contractState.status === "active" ? "var(--cyan)"
+    : contractState.status === "review" ? "#818CF8"
+    : contractState.status === "disputed" ? "var(--destructive)"
     : "var(--gold)";
 
   return (
@@ -275,40 +335,40 @@ function ContractCard({ c }: { c: typeof contracts[number] }) {
           className="flex h-10 w-10 items-center justify-center rounded-full border-2 text-xs font-bold"
           style={{ borderColor: "var(--cyan)", background: "rgba(0,198,167,0.10)", color: "var(--cyan)" }}
         >
-          {initials(c.developer.name)}
+          {initials(contractState.developer.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-foreground">{c.developer.name}</div>
+          <div className="truncate text-sm font-semibold text-foreground">{contractState.developer.name}</div>
           <div className="truncate text-xs" style={{ color: "var(--text-secondary)" }}>
-            {c.developer.title}
+            {contractState.developer.title}
           </div>
           <div className="font-mono text-[11px]" style={{ color: "var(--gold)" }}>
-            ⭐ {c.developer.rating}
+            ⭐ {contractState.developer.rating}
           </div>
         </div>
-        <StatusPill status={c.status} />
+        <StatusPill status={contractState.status} />
       </div>
 
-      <div className="mb-3.5 line-clamp-1 text-[16px] font-semibold text-foreground">{c.job_title}</div>
+      <div className="mb-3.5 line-clamp-1 text-[16px] font-semibold text-foreground">{contractState.job_title}</div>
 
       <div className="mb-3.5">
         <div
           className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.08em]"
           style={{ color: "var(--text-muted)" }}
         >
-          Milestone {c.milestone_current} of {c.milestone_total}
+          Milestone {contractState.milestone_current} of {contractState.milestone_total}
         </div>
         <div className="flex gap-1">
-          {Array.from({ length: c.milestone_total }).map((_, i) => (
+          {Array.from({ length: contractState.milestone_total }).map((_, i) => (
             <div
               key={i}
               className="h-1.5 flex-1 rounded-full"
-              style={{ background: i < c.milestone_current ? "var(--gold)" : "var(--border)" }}
+              style={{ background: i < contractState.milestone_current ? "var(--gold)" : "var(--border)" }}
             />
           ))}
         </div>
         <div className="mt-1.5 text-[11px]" style={{ color: "var(--text-secondary)" }}>
-          {c.milestone_label}
+          {contractState.milestone_label}
         </div>
       </div>
 
@@ -316,31 +376,32 @@ function ContractCard({ c }: { c: typeof contracts[number] }) {
         <div className="flex items-center gap-1.5">
           <Lock className="h-4 w-4" style={{ color: "var(--gold)" }} />
           <span className="font-mono text-sm font-semibold" style={{ color: "var(--gold)" }}>
-            {fmtGHS(c.escrow_amount)} in escrow
+            {fmtGHS(contractState.escrow_amount)} in escrow
           </span>
         </div>
         <span
           className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
           style={{
-            background: c.escrow_status === "holding" ? "rgba(16,185,129,0.15)" : "rgba(74,96,128,0.20)",
-            color: c.escrow_status === "holding" ? "var(--success)" : "var(--text-secondary)",
+            background: contractState.escrow_status === "holding" ? "rgba(16,185,129,0.15)" : "rgba(74,96,128,0.20)",
+            color: contractState.escrow_status === "holding" ? "var(--success)" : "var(--text-secondary)",
           }}
         >
-          {c.escrow_status === "holding" ? "Funded ✓" : "Released"}
+          {contractState.escrow_status === "holding" ? "Funded ✓" : "Released"}
         </span>
       </div>
 
       <div className="mb-4 flex items-center justify-between">
         <span className="font-mono text-[15px] font-semibold text-foreground">
-          Contract: {fmtGHS(c.contract_amount)}
+          Contract: {fmtGHS(contractState.contract_amount)}
         </span>
         <span className="font-mono text-[13px]" style={{ color: "var(--success)" }}>
-          Paid: {fmtGHS(c.paid_amount)}
+          Paid: {fmtGHS(contractState.paid_amount)}
         </span>
       </div>
 
       <div className="flex gap-2">
         <button
+          onClick={handleMessage}
           className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border bg-[var(--card-hover)] text-[13px] font-semibold transition-colors"
           style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
         >
@@ -348,6 +409,7 @@ function ContractCard({ c }: { c: typeof contracts[number] }) {
         </button>
         <Link
           to="/client/contracts"
+          search={{ contract: contractState.id }}
           className="flex h-9 flex-1 items-center justify-center rounded-lg text-[13px] font-semibold transition-transform hover:scale-[1.02] gold-gradient shadow-gold"
           style={{ color: "var(--background)" }}
         >
@@ -355,16 +417,18 @@ function ContractCard({ c }: { c: typeof contracts[number] }) {
         </Link>
       </div>
 
-      {c.awaiting_approval && (
+      {contractState.awaiting_approval && (
         <button
-          className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-lg border text-[13px] font-semibold animate-pulse-border"
+          onClick={handleApprove}
+          disabled={isApproving}
+          className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-lg border text-[13px] font-semibold animate-pulse-border disabled:opacity-50"
           style={{
             background: "rgba(16,185,129,0.15)",
             borderColor: "rgba(16,185,129,0.40)",
             color: "var(--success)",
           }}
         >
-          <CheckCircle2 className="h-4 w-4" /> Approve Milestone & Release Payment
+          <CheckCircle2 className="h-4 w-4" /> {isApproving ? "Releasing Payment..." : "Approve Milestone & Release Payment"}
         </button>
       )}
     </div>
@@ -390,7 +454,13 @@ function StatusPill({ status }: { status: "active" | "review" | "disputed" | "co
 
 /* ---------- Proposals ---------- */
 
-function ProposalsSection() {
+function ProposalsSection({
+  onHire,
+  onViewProfile,
+}: {
+  onHire: (target: HireTarget) => void;
+  onViewProfile: (name: string) => void;
+}) {
   return (
     <section className="mb-7">
       <div className="mb-4 flex items-center justify-between">
@@ -424,7 +494,18 @@ function ProposalsSection() {
             </div>
             <div className="space-y-2">
               {g.proposals.map((p) => (
-                <ProposalCard key={p.id} p={p} />
+                <ProposalCard
+                  key={p.id}
+                  p={p}
+                  jobId={g.job_id}
+                  jobTitle={g.job_title}
+                  onHire={() =>
+                    onHire(
+                      hireTargetFromProposal(p.id, g.job_id, g.job_title, p.dev.name, p.bid, p.days),
+                    )
+                  }
+                  onViewProfile={() => onViewProfile(p.dev.name)}
+                />
               ))}
             </div>
           </div>
@@ -434,39 +515,57 @@ function ProposalsSection() {
   );
 }
 
-function ProposalCard({ p }: { p: typeof proposalsByJob[number]["proposals"][number] }) {
+function ProposalCard({
+  p,
+  onHire,
+  onViewProfile,
+}: {
+  p: typeof proposalsByJob[number]["proposals"][number];
+  jobId: string;
+  jobTitle: string;
+  onHire: () => void;
+  onViewProfile: () => void;
+}) {
   return (
     <div
-      className="flex items-start gap-4 rounded-xl border bg-card p-4 transition-colors duration-200"
+      className="flex flex-col sm:flex-row items-start gap-4 rounded-xl border bg-card p-4 transition-colors duration-200"
       style={{ borderColor: "var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(245,166,35,0.30)")}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
     >
-      <div
-        className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold"
-        style={{ borderColor: "var(--cyan)", background: "rgba(0,198,167,0.10)", color: "var(--cyan)" }}
-      >
-        {initials(p.dev.name)}
+      <div className="flex items-start gap-3 w-full sm:w-auto shrink-0">
+        <div
+          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold"
+          style={{ borderColor: "var(--cyan)", background: "rgba(0,198,167,0.10)", color: "var(--cyan)" }}
+        >
+          {initials(p.dev.name)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-foreground">{p.dev.name}</span>
+            <span className="font-mono text-[12px] whitespace-nowrap" style={{ color: "var(--gold)" }}>
+              ⭐ {p.dev.rating} · {p.dev.jobs} jobs
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+            {p.ai_generated && (
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                style={{ background: "rgba(245,166,35,0.15)", color: "var(--gold)" }}
+              >
+                ✨ AI Assisted
+              </span>
+            )}
+            <span className="text-[11px] text-[color:var(--text-muted)] sm:hidden">
+              Posted {p.hours_ago}h ago
+            </span>
+          </div>
+        </div>
       </div>
 
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-foreground">{p.dev.name}</span>
-          <span className="font-mono text-[12px]" style={{ color: "var(--gold)" }}>
-            ⭐ {p.dev.rating} · {p.dev.jobs} jobs
-          </span>
-          {p.ai_generated && (
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-              style={{ background: "rgba(245,166,35,0.15)", color: "var(--gold)" }}
-            >
-              ✨ AI Assisted
-            </span>
-          )}
-        </div>
-
-        <div className="mt-1.5 flex items-center gap-2">
-          <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+      <div className="min-w-0 flex-1 w-full">
+        <div className="mt-1.5 flex items-center gap-2 w-full">
+          <span className="text-[11px] shrink-0" style={{ color: "var(--text-muted)" }}>
             🤖 AI Match:
           </span>
           <div
@@ -481,33 +580,41 @@ function ProposalCard({ p }: { p: typeof proposalsByJob[number]["proposals"][num
               }}
             />
           </div>
-          <span className="font-mono text-[12px] font-bold" style={{ color: "var(--cyan)" }}>
+          <span className="font-mono text-[12px] font-bold text-[color:var(--cyan)] shrink-0">
             {p.ai_match}%
           </span>
         </div>
 
         <p
-          className="mt-1.5 line-clamp-2 text-[13px]"
-          style={{ color: "var(--text-secondary)" }}
+          className="mt-2 text-[13px] leading-relaxed text-[color:var(--text-secondary)]"
         >
           {p.preview}
         </p>
       </div>
 
-      <div className="flex flex-shrink-0 flex-col items-end gap-2">
-        <div className="font-mono text-base font-bold text-foreground">{fmtGHS(p.bid)}</div>
-        <div className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{p.days} days</div>
-        <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>{p.hours_ago} hrs ago</div>
-        <div className="flex gap-1.5">
+      <div
+        className="flex w-full flex-row items-center justify-between gap-3 border-t pt-3 mt-1 sm:flex-col sm:items-end sm:justify-start sm:border-t-0 sm:pt-0 sm:mt-0 sm:w-auto shrink-0"
+        style={{ borderColor: "var(--border)" }}
+      >
+        <div className="text-left sm:text-right">
+          <div className="font-mono text-base font-bold text-foreground">{fmtGHS(p.bid)}</div>
+          <div className="text-[12px] text-[color:var(--text-secondary)] whitespace-nowrap">
+            {p.days} days <span className="hidden sm:inline">· {p.hours_ago} hrs ago</span>
+          </div>
+        </div>
+        <div className="flex gap-2 shrink-0">
           <button
+            type="button"
+            onClick={onViewProfile}
             className="h-8 rounded-md border px-2.5 text-[11px] font-semibold transition-colors"
             style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
           >
-            ★ Shortlist
+            View Profile
           </button>
           <button
-            className="h-8 rounded-md px-3 text-[11px] font-semibold transition-transform hover:scale-[1.02] gold-gradient shadow-gold"
-            style={{ color: "var(--background)" }}
+            type="button"
+            onClick={onHire}
+            className="h-8 rounded-md px-3 text-[11px] font-semibold transition-transform hover:scale-[1.02] gold-gradient shadow-gold text-[color:var(--background)]"
           >
             Hire Now →
           </button>
@@ -519,7 +626,13 @@ function ProposalCard({ p }: { p: typeof proposalsByJob[number]["proposals"][num
 
 /* ---------- Recommended Devs ---------- */
 
-function RecommendedDevelopersSection() {
+function RecommendedDevelopersSection({
+  onHire,
+  onViewProfile,
+}: {
+  onHire: (dev: HirerDeveloper) => void;
+  onViewProfile: (dev: HirerDeveloper) => void;
+}) {
   return (
     <section className="mb-7">
       <div className="mb-4 flex items-end justify-between">
@@ -537,15 +650,32 @@ function RecommendedDevelopersSection() {
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-2">
-        {recommendedDevelopers.map((d) => (
-          <DevMiniCard key={d.id} d={d} />
-        ))}
+        {recommendedDevelopers.map((d) => {
+          const dev = getHirerDeveloper(d.id);
+          if (!dev) return null;
+          return (
+            <DevMiniCard
+              key={d.id}
+              d={d}
+              onViewProfile={() => onViewProfile(dev)}
+              onHire={() => onHire(dev)}
+            />
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function DevMiniCard({ d }: { d: typeof recommendedDevelopers[number] }) {
+function DevMiniCard({
+  d,
+  onViewProfile,
+  onHire,
+}: {
+  d: typeof recommendedDevelopers[number];
+  onViewProfile: () => void;
+  onHire: () => void;
+}) {
   return (
     <div
       className="relative w-[220px] flex-shrink-0 rounded-[14px] border bg-card p-4 transition-all duration-200 hover:-translate-y-1"
@@ -601,12 +731,24 @@ function DevMiniCard({ d }: { d: typeof recommendedDevelopers[number] }) {
           </span>
         ))}
       </div>
-      <button
-        className="mt-3 h-9 w-full rounded-lg border text-[13px] font-semibold transition-colors"
-        style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
-      >
-        View Profile
-      </button>
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={onViewProfile}
+          className="h-9 flex-1 rounded-lg border text-[12px] font-semibold transition-colors"
+          style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
+        >
+          View Profile
+        </button>
+        <button
+          type="button"
+          onClick={onHire}
+          className="h-9 flex-1 rounded-lg text-[12px] font-semibold gold-gradient shadow-gold"
+          style={{ color: "var(--background)" }}
+        >
+          Hire
+        </button>
+      </div>
     </div>
   );
 }

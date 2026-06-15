@@ -1,16 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-
 import { TopBar } from "@/components/hirer-dashboard/TopBar";
 import { Search, Bot, ArrowRight } from "lucide-react";
-import { recommendedDevelopers } from "@/lib/hirer-mock-data";
 import { initials } from "@/lib/hirer-format";
-
-const ALL_DEVS = [
-  ...recommendedDevelopers,
-  { id: "d7", name: "Yaw Owusu", title: "Backend Python", location: "Kumasi, Ghana 🇬🇭", flag: "🇬🇭", rating: 4.7, rate: 130, available: true, top: false, skills: ["Python", "Django"], recently_active: true },
-  { id: "d8", name: "Mariam Diallo", title: "DevOps Engineer", location: "Bamako, Mali 🇲🇱", flag: "🇲🇱", rating: 4.8, rate: 145, available: false, top: false, skills: ["AWS", "Docker"], recently_active: false },
-];
+import { hirerDeveloperCatalog, getHirerDeveloper, type HirerDeveloper } from "@/lib/hirer-developer-catalog";
+import { HireDialog, type HireTarget } from "@/components/hirer-dashboard/HireDialog";
+import { DeveloperProfileDialog } from "@/components/hirer-dashboard/DeveloperProfileDialog";
+import { AiMatchDialog } from "@/components/hirer-dashboard/AiMatchDialog";
+import { hireTargetFromDeveloper } from "@/lib/hirer-hire-flow";
 
 const FILTERS = ["All", "Available Now ●", "Top Rated ⭐", "< GHS 100/hr", "GHS 100–200/hr", "Ghana 🇬🇭", "Nigeria 🇳🇬", "Full Stack", "Mobile"];
 
@@ -20,11 +17,42 @@ export const Route = createFileRoute("/client/developers")({
 });
 
 function DevelopersPage() {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState("All");
+  const [query, setQuery] = useState("");
+  const [hireTarget, setHireTarget] = useState<HireTarget | null>(null);
+  const [hireOpen, setHireOpen] = useState(false);
+  const [profileDev, setProfileDev] = useState<HirerDeveloper | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+
+  const openHire = (dev: HirerDeveloper) => {
+    setHireTarget(hireTargetFromDeveloper(dev));
+    setHireOpen(true);
+  };
+
+  const openProfile = (dev: HirerDeveloper) => {
+    setProfileDev(dev);
+    setProfileOpen(true);
+  };
+
+  const filtered = hirerDeveloperCatalog.filter((d) => {
+    const q = query.trim().toLowerCase();
+    if (q && !`${d.name} ${d.title} ${d.skills.join(" ")}`.toLowerCase().includes(q)) return false;
+    if (filter === "Available Now ●" && !d.available) return false;
+    if (filter === "Top Rated ⭐" && !d.top) return false;
+    if (filter === "< GHS 100/hr" && d.rate >= 100) return false;
+    if (filter === "GHS 100–200/hr" && (d.rate < 100 || d.rate > 200)) return false;
+    if (filter === "Ghana 🇬🇭" && !d.location.includes("Ghana")) return false;
+    if (filter === "Nigeria 🇳🇬" && !d.location.includes("Nigeria")) return false;
+    if (filter === "Full Stack" && !d.title.toLowerCase().includes("full")) return false;
+    if (filter === "Mobile" && !d.title.toLowerCase().includes("mobile") && !d.skills.some((s) => /flutter|react native/i.test(s))) return false;
+    return true;
+  });
 
   return (
     <>
-    <TopBar title="Browse Developers" subtitle="Find verified African talent for your next project" />
+      <TopBar title="Browse Developers" subtitle="Find verified African talent for your next project" />
 
       <div className="relative mb-5">
         <Search
@@ -32,15 +60,15 @@ function DevelopersPage() {
           style={{ color: "var(--gold)" }}
         />
         <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name, skill, or specialisation..."
           className="h-14 w-full rounded-xl border bg-card pl-14 pr-4 text-sm text-foreground outline-none focus:border-[var(--gold)]"
           style={{ borderColor: "var(--border)" }}
         />
       </div>
 
-      <div
-        className="mb-6 flex items-center justify-between rounded-2xl px-5 py-4 gold-gradient"
-      >
+      <div className="mb-6 flex items-center justify-between rounded-2xl px-5 py-4 gold-gradient">
         <div className="flex items-center gap-3">
           <Bot className="h-8 w-8" style={{ color: "var(--background)" }} />
           <div>
@@ -53,6 +81,8 @@ function DevelopersPage() {
           </div>
         </div>
         <button
+          type="button"
+          onClick={() => setAiOpen(true)}
           className="flex h-10 items-center gap-1 rounded-lg border bg-black/20 px-4 text-sm font-semibold"
           style={{ borderColor: "rgba(0,0,0,0.30)", color: "var(--background)" }}
         >
@@ -66,6 +96,7 @@ function DevelopersPage() {
           return (
             <button
               key={f}
+              type="button"
               onClick={() => setFilter(f)}
               className="h-9 flex-shrink-0 rounded-full border px-3.5 text-[13px] font-medium transition-colors"
               style={{
@@ -81,15 +112,44 @@ function DevelopersPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {ALL_DEVS.map((d) => (
-          <DeveloperCard key={d.id} d={d} />
+        {filtered.map((d) => (
+          <DeveloperCard key={d.id} d={d} onProfile={() => openProfile(d)} onHire={() => openHire(d)} />
         ))}
       </div>
+
+      <HireDialog
+        open={hireOpen}
+        onOpenChange={setHireOpen}
+        target={hireTarget}
+        onSuccess={(r) => navigate({ to: "/client/contracts", search: { hire: r.hire_id } as any })}
+      />
+      <DeveloperProfileDialog
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        developer={profileDev}
+        onHire={profileDev ? () => openHire(profileDev) : undefined}
+      />
+      <AiMatchDialog
+        open={aiOpen}
+        onOpenChange={setAiOpen}
+        onSelectDeveloper={(id) => {
+          const dev = getHirerDeveloper(id);
+          if (dev) openProfile(dev);
+        }}
+      />
     </>
   );
 }
 
-function DeveloperCard({ d }: { d: typeof ALL_DEVS[number] }) {
+function DeveloperCard({
+  d,
+  onProfile,
+  onHire,
+}: {
+  d: HirerDeveloper;
+  onProfile: () => void;
+  onHire: () => void;
+}) {
   return (
     <div
       className="relative overflow-hidden rounded-2xl border bg-card transition-all duration-200 hover:-translate-y-0.5"
@@ -97,9 +157,7 @@ function DeveloperCard({ d }: { d: typeof ALL_DEVS[number] }) {
     >
       <div
         className="absolute inset-x-0 top-0 h-[3px]"
-        style={{
-          background: d.available ? "var(--cyan)" : "var(--gold)",
-        }}
+        style={{ background: d.available ? "var(--cyan)" : "var(--gold)" }}
       />
       <div className="p-5">
         <div
@@ -113,16 +171,12 @@ function DeveloperCard({ d }: { d: typeof ALL_DEVS[number] }) {
           {initials(d.name)}
         </div>
         <div className="mt-3 text-center text-[15px] font-semibold text-foreground">{d.name}</div>
-        <div className="text-center text-[13px]" style={{ color: "var(--text-secondary)" }}>
-          {d.title}
-        </div>
-        <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-          📍 {d.location}
-        </div>
+        <div className="text-center text-[13px]" style={{ color: "var(--text-secondary)" }}>{d.title}</div>
+        <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>📍 {d.location}</div>
 
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <Stat label="RATING" value={`⭐ ${d.rating}`} color="var(--gold)" />
-          <Stat label="JOBS" value="38" color="#fff" />
+          <Stat label="JOBS" value={String(d.jobs)} color="#fff" />
           <Stat label="RATE" value={`GHS ${d.rate}/hr`} color="#fff" />
         </div>
 
@@ -138,17 +192,18 @@ function DeveloperCard({ d }: { d: typeof ALL_DEVS[number] }) {
           ))}
         </div>
       </div>
-      <div
-        className="flex gap-2 border-t p-3"
-        style={{ borderColor: "var(--border)" }}
-      >
+      <div className="flex gap-2 border-t p-3" style={{ borderColor: "var(--border)" }}>
         <button
+          type="button"
+          onClick={onProfile}
           className="h-9 flex-1 rounded-lg border text-[13px] font-semibold"
           style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
         >
           View Profile
         </button>
         <button
+          type="button"
+          onClick={onHire}
           className="h-9 flex-1 rounded-lg text-[13px] font-semibold transition-transform hover:scale-[1.02] gold-gradient shadow-gold"
           style={{ color: "var(--background)" }}
         >

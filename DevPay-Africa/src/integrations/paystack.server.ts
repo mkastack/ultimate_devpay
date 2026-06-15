@@ -4,7 +4,7 @@ const PAYSTACK_API_BASE = "https://api.paystack.co";
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY ?? "";
 
 export const verifyPaystackPaymentFn = createServerFn({ method: "GET" })
-  .validator((data: { reference: string }) => data)
+  .inputValidator((data: { reference: string }) => data)
   .handler(async ({ data }) => {
     if (!PAYSTACK_SECRET_KEY) {
       throw new Error(
