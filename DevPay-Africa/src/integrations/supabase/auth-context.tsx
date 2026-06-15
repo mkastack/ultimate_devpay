@@ -85,15 +85,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return row;
     }
 
+    // 🔥 FIX: Changed .insert() to .upsert() and added { onConflict: "id" }
     const { data: created, error: profileError } = await supabase
       .from("profiles")
-      .insert({
+      .upsert({
         id: userId,
         role: details.role,
         full_name: details.fullName,
         username: details.username,
         email: details.email,
-      })
+      }, { onConflict: "id" })
       .select()
       .maybeSingle();
 

@@ -13,13 +13,19 @@ type HirePayload = {
   milestones: Array<{ name: string; amount: number; due_days: number }>;
 };
 
-export const createHireRequest = createServerFn({ method: "POST" })
-  .validator((data: HirePayload) => data)
-  .handler(async ({ data }) => {
+export const createHireRequest = createServerFn({
+  method: "POST",
+
+  validate: (data: HirePayload) => {
+    return data;
+  },
+
+  fn: async ({ data }) => {
     return {
       hire_id: `hire_${data.job_id}_${Date.now()}`,
       contract_id: `contract_${data.job_id}`,
       job_title: data.job_title,
       developer_name: data.developer_name,
     };
-  });
+  },
+});

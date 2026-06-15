@@ -4,6 +4,8 @@ import { useState } from "react";
 import { TopBar } from "@/components/hirer-dashboard/TopBar";
 import { Check, ArrowLeft, ArrowRight, Lock, Sparkles } from "lucide-react";
 import { fmtUSD, ghsToUsd } from "@/lib/hirer-format";
+import { supabase } from "@/integrations/supabase/client";
+import { createJob } from "@/lib/jobs.api";
 
 export const Route = createFileRoute("/client/post-job")({
   head: () => ({ meta: [{ title: "Post a Job · DevPay Africa" }] }),
@@ -39,6 +41,43 @@ function PostJobPage() {
   const [budget, setBudget] = useState<string>("");
   const [featured, setFeatured] = useState(false);
   const [posted, setPosted] = useState(false);
+
+
+const handleSubmit = async () => {
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+
+    if (!userId) throw new Error("Not logged in");
+
+    const { data, error } = await supabase.from("jobs").insert({
+      client_id: userId,
+      title,
+      description,
+      category,
+      project_type: projectType,
+      budget_type: budgetType,
+      budget_min: budgetType === "fixed" ? Number(budget) : null,
+      budget_max: budgetType === "fixed" ? Number(budget) : null,
+      currency: "GHS",
+      duration: timeline,
+      experience_level: experience,
+      status: "open",
+      is_featured: false,
+      views_count: 0,
+      proposals_count: 0,
+    }).select().single();
+
+    if (error) throw error;
+
+    console.log("Job created:", data);
+    setPosted(true);
+
+  } catch (err) {
+    console.error("Job post failed:", err);
+    alert("Failed to post job");
+  }
+};
 
   if (posted) return <SuccessOverlay />;
 
@@ -135,7 +174,7 @@ function PostJobPage() {
           </button>
         ) : (
           <button
-            onClick={() => setPosted(true)}
+            onClick={handleSubmit}
             className="flex h-14 items-center gap-2 rounded-xl px-8 font-display text-[18px] font-bold transition-transform hover:scale-[1.01] gold-gradient shadow-gold-lg"
             style={{ color: "var(--background)" }}
           >
