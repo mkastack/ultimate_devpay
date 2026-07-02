@@ -10,6 +10,7 @@ import { ProposalDialog } from "@/components/dev-dashboard/ProposalDialog";
 import { jobMatches, fmtUSD, fmtGHS, developer } from "@/lib/dev-mock-data";
 import { toast } from "sonner";
 
+
 export const Route = createFileRoute("/developer/jobs-for-you")({
   head: () => ({
     meta: [

@@ -6,6 +6,7 @@ import {
 import { toast } from "sonner";
 import { fmtGHS, fmtUSD, developer } from "@/lib/dev-mock-data";
 import { supabase } from "@/integrations/supabase/client";
+import { GoogleGenAI } from '@google/genai';
 
 export function ProposalDialog({
   open,
@@ -51,15 +52,40 @@ export function ProposalDialog({
     };
   }, [title, jobTitle, bid, days]);
 
-  function aiBoost() {
-    setAiBoosting(true);
-    setTimeout(() => {
-      setAiBoosting(false);
-      const draft = `${aiSummary.hook}\n\n${aiSummary.strength}\n\n${aiSummary.plan}\n\nMy approach: I'll start with a quick discovery call, ship a working preview within the first 48 hours, then iterate based on your feedback. You'll get clean, documented code and a smooth handoff.\n\nReady to start as soon as today — let's chat!`;
-      setCover(draft);
-      toast.success("AI draft ready", { description: "Tweak it to make it yours." });
-    }, 600);
+ async function aiBoost() {
+  console.log("Is API Key loaded? ->", !!import.meta.env.VITE_GEMINI_API_KEY);
+  setAiBoosting(true);
+
+  try {
+const ai = new GoogleGenAI({ 
+  apiKey: import.meta.env.VITE_GEMINI_API_KEY 
+});
+
+
+
+    // Use a stable, enterprise-supported model name on Vertex
+const response = await ai.models.generateContent({
+  model: 'gemini-2.5-flash', // Updated from gemini-1.5-flash to fix the 404
+  contents: `Write a professional freelance proposal cover letter for a job. Keep it under 250 words.`,
+});
+
+
+    if (response.text) {
+      setCover(response.text);
+      toast.success("AI draft ready", { description: "Tweak it to make it yours!" });
+    } else {
+      throw new Error("Empty response received from AI model.");
+    }
+
+  } catch (error) {
+    console.error("Gemini API Error details:", error);
+    toast.error("Failed to generate draft", { description: "Please check your console logs." });
+  } finally {
+    setAiBoosting(false);
   }
+}
+
+
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
