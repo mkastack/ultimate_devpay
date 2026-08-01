@@ -1,8 +1,20 @@
 import { ArrowRight } from "lucide-react";
-import { developer, counts, greeting } from "@/lib/dev-mock-data";
+import { counts, greeting } from "@/lib/dev-mock-data"; // Keeping counts/greeting from mock for now
 
-export function WelcomeBanner() {
-  const firstName = developer.full_name.split(" ")[0];
+interface WelcomeBannerProps {
+  // You can type this strictly using Supabase's User type if using @supabase/supabase-js
+  user: any; 
+}
+
+export function WelcomeBanner({ user }: WelcomeBannerProps) {
+  // 1. Extract the full name from user_metadata, fallback to email or "Developer"
+  const fullName = user?.user_metadata?.full_name || user?.email || "Developer";
+  const firstName = fullName.split(" ")[0];
+
+  // 2. Handle the Pro badge. 
+  // Note: 'subscription_plan' is not in your provided JSON. If you store it in Supabase,
+  // it usually goes into 'app_metadata' or a separate database profiles table.
+  const isPro = user?.app_metadata?.subscription_plan === "pro";
 
   return (
     <div
@@ -26,7 +38,7 @@ export function WelcomeBanner() {
       </svg>
 
       {/* Pro badge top-right */}
-      {developer.subscription_plan === "pro" && (
+      {isPro && (
         <span
           className="absolute right-4 top-4 md:right-6 md:top-6 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold"
           style={{
@@ -38,7 +50,7 @@ export function WelcomeBanner() {
           ⭐ Pro Developer
         </span>
       )}
- 
+
       <div className="relative z-10 max-w-full md:max-w-[65%]">
         <div className="font-display text-[22px] sm:text-[26px] font-bold text-white pr-20 md:pr-0">
           {greeting()}, {firstName} 👋
@@ -56,5 +68,5 @@ export function WelcomeBanner() {
         </div>
       </div>
     </div>
-  );
+   );
 }
