@@ -1,15 +1,23 @@
 import { useState } from "react";
 import { Search, Bell, Plus, LogOut, User as UserIcon, Settings as SettingsIcon, Sun, Moon, DollarSign, MessageSquare, FileText, Briefcase } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { developer, counts, activities, type Activity } from "@/lib/dev-mock-data";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ProposalDialog } from "./ProposalDialog";
 import { SearchDialog } from "./SearchDialog";
 import { useTheme } from "@/lib/theme-context";
+import { useAuth } from "@/integrations/supabase/auth-context";
 
 function initials(name: string) {
   return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
 }
+
+const getDisplayName = (profile: { full_name?: string | null } | null, session: { user?: { email?: string | null } | null } | null) => {
+  return profile?.full_name || session?.user?.email?.split("@")[0] || "Developer";
+};
+
+const getUserName = (profile: { username?: string | null } | null, session: { user?: { email?: string | null } | null } | null) => {
+  return profile?.username || session?.user?.email?.split("@")[0] || "developer";
+};
 
 interface NotificationItem extends Activity {
   read: boolean;
@@ -19,9 +27,8 @@ export function DashboardHeader({ title, subtitle }: { title: string; subtitle?:
   const [proposalOpen, setProposalOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const { theme, toggle } = useTheme();
-  const [notificationsList, setNotificationsList] = useState<NotificationItem[]>(() =>
-    activities.map((a: Activity, i: number) => ({ ...a, read: i >= counts.unreadNotifications }))
-  );
+  const { profile, session } = useAuth();
+  const [notificationsList, setNotificationsList] = useState<NotificationItem[]>([]);
   const unreadCount = notificationsList.filter((n: NotificationItem) => !n.read).length;
 
   const markAllRead = () => {
@@ -201,12 +208,12 @@ export function DashboardHeader({ title, subtitle }: { title: string; subtitle?:
               aria-label="Open profile"
               className="grid h-10 w-10 place-items-center rounded-full bg-[color:var(--surface-hover)] font-display text-[13px] font-bold text-[color:var(--cyan-brand)] outline-none transition-transform hover:scale-[1.04]"
               style={{
-                border: developer.subscription_plan === "pro"
+                border: profile?.is_verified
                   ? "2px solid var(--gold-brand)"
                   : "2px solid var(--color-border)",
               }}
             >
-              {initials(developer.full_name)}
+              {initials(getDisplayName(profile, session))}
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -224,21 +231,21 @@ export function DashboardHeader({ title, subtitle }: { title: string; subtitle?:
                 <div
                   className="grid h-12 w-12 place-items-center rounded-full bg-[color:var(--surface-hover)] font-display font-bold text-[color:var(--cyan-brand)]"
                   style={{
-                    border: developer.subscription_plan === "pro"
+                    border: profile?.is_verified
                       ? "2px solid var(--gold-brand)"
                       : "2px solid var(--color-border)",
                   }}
                 >
-                  {initials(developer.full_name)}
+                  {initials(getDisplayName(profile, session))}
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-[14px] font-semibold text-white">{developer.full_name}</div>
-                  <div className="truncate text-[12px] text-[color:var(--text-muted)]">@{developer.username}</div>
+                  <div className="truncate text-[14px] font-semibold text-white">{getDisplayName(profile, session)}</div>
+                  <div className="truncate text-[12px] text-[color:var(--text-muted)]">@{getUserName(profile, session)}</div>
                 </div>
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                {developer.subscription_plan === "pro" ? (
+                {profile?.is_verified ? (
                   <span
                     className="inline-flex items-center gap-1 rounded-full px-2.5 py-[3px] text-[11px] font-bold"
                     style={{
@@ -247,7 +254,7 @@ export function DashboardHeader({ title, subtitle }: { title: string; subtitle?:
                       color: "var(--gold-brand)",
                     }}
                   >
-                    ⭐ Pro Developer
+                    ⭐ Verified Developer
                   </span>
                 ) : (
                   <span className="inline-flex rounded-full bg-[color:var(--surface-hover)] px-2.5 py-[3px] text-[11px] font-bold text-[color:var(--text-secondary)]">

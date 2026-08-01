@@ -9,7 +9,7 @@ import { ContractsRow } from "@/components/dev-dashboard/ContractsRow";
 import { JobsForYou } from "@/components/dev-dashboard/JobsForYou";
 import { BottomRow } from "@/components/dev-dashboard/BottomRow";
 import { SubscriptionOffer } from "@/components/dev-dashboard/SubscriptionOffer";
-import { developer } from "@/lib/dev-mock-data";
+import { useAuth } from "@/integrations/supabase/auth-context";
 
 export const Route = createFileRoute("/developer/")({
   head: () => ({
@@ -22,7 +22,9 @@ export const Route = createFileRoute("/developer/")({
 });
 
 function OverviewPage() {
-  const subtitle = `${format(new Date(), "EEEE, d MMMM yyyy")} · ${developer.city}, ${developer.country} 🇬🇭`;
+  const { profile } = useAuth();
+  const city = profile?.full_name ? "Your workspace" : "Accra";
+  const subtitle = `${format(new Date(), "EEEE, d MMMM yyyy")} · ${city} 🇬🇭`;
   return (
     <>
       <DevDashboardHeader title="Overview" subtitle={subtitle} />

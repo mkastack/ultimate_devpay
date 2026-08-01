@@ -1,20 +1,69 @@
 import { ArrowRight } from "lucide-react";
-import { counts, greeting } from "@/lib/dev-mock-data"; // Keeping counts/greeting from mock for now
+import { useEffect, useState } from "react";
+import { useAuth } from "@/integrations/supabase/auth-context";
+import { supabase } from "@/integrations/supabase/client";
 
-interface WelcomeBannerProps {
-  // You can type this strictly using Supabase's User type if using @supabase/supabase-js
-  user: any; 
+function getGreeting(date = new Date()) {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
 }
 
-export function WelcomeBanner({ user }: WelcomeBannerProps) {
-  // 1. Extract the full name from user_metadata, fallback to email or "Developer"
-  const fullName = user?.user_metadata?.full_name || user?.email || "Developer";
-  const firstName = fullName.split(" ")[0];
+export function WelcomeBanner() {
+  const { profile, session } = useAuth();
+  const [stats, setStats] = useState({ pendingProposals: 0, activeContracts: 0 });
 
-  // 2. Handle the Pro badge. 
-  // Note: 'subscription_plan' is not in your provided JSON. If you store it in Supabase,
-  // it usually goes into 'app_metadata' or a separate database profiles table.
-  const isPro = user?.app_metadata?.subscription_plan === "pro";
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    let active = true;
+
+    const loadStats = async () => {
+      try {
+        const [proposalRes, contractRes] = await Promise.all([
+          supabase.from("proposals").select("id, status").eq("developer_id", session.user.id),
+          supabase.from("contracts").select("id, status").eq("developer_id", session.user.id),
+        ]);
+
+        if (proposalRes.error) throw proposalRes.error;
+        if (contractRes.error) throw contractRes.error;
+
+        const pendingProposals = (proposalRes.data ?? []).filter((item: { status?: string | null }) => {
+          const status = String(item?.status ?? "").toLowerCase();
+          return status === "pending" || status === "submitted" || status === "draft";
+        }).length;
+
+        const activeContracts = (contractRes.data ?? []).filter((item: { status?: string | null }) => {
+          const status = String(item?.status ?? "").toLowerCase();
+          return status === "active" || status === "in_progress" || status === "accepted" || status === "locked" || status === "funded";
+        }).length;
+
+        if (active) {
+          setStats({ pendingProposals, activeContracts });
+        }
+      } catch (error) {
+        console.error("Failed to load welcome banner stats", error);
+        if (active) {
+          setStats({ pendingProposals: 0, activeContracts: 0 });
+        }
+      }
+    };
+
+    void loadStats();
+
+    return () => {
+      active = false;
+    };
+  }, [session?.user?.id]);
+
+  const fullName =
+    profile?.full_name ||
+    session?.user?.user_metadata?.full_name ||
+    session?.user?.email?.split("@")[0] ||
+    "Developer";
+  const firstName = fullName.split(" ")[0];
+  const isPro = Boolean(profile?.is_verified || session?.user?.app_metadata?.subscription_plan === "pro");
 
   return (
     <div
@@ -25,11 +74,13 @@ export function WelcomeBanner({ user }: WelcomeBannerProps) {
         border: "1px solid rgba(0,198,167,0.15)",
       }}
     >
-      {/* Decorative bracket+shield SVG */}
       <svg
         aria-hidden
         className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2"
-        width="180" height="180" viewBox="0 0 180 180" fill="none"
+        width="180"
+        height="180"
+        viewBox="0 0 180 180"
+        fill="none"
         style={{ opacity: 0.08 }}
       >
         <path d="M55 30 L25 90 L55 150" stroke="#00C6A7" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
@@ -37,7 +88,6 @@ export function WelcomeBanner({ user }: WelcomeBannerProps) {
         <path d="M90 50 L60 65 V100 C60 125 75 140 90 145 C105 140 120 125 120 100 V65 Z" stroke="#00C6A7" strokeWidth="6" fill="none" strokeLinejoin="round" />
       </svg>
 
-      {/* Pro badge top-right */}
       {isPro && (
         <span
           className="absolute right-4 top-4 md:right-6 md:top-6 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold"
@@ -47,16 +97,16 @@ export function WelcomeBanner({ user }: WelcomeBannerProps) {
             color: "var(--gold-brand)",
           }}
         >
-          ⭐ Pro Developer
+          ⭐ {profile?.is_verified ? "Verified Developer" : "Pro Developer"}
         </span>
       )}
 
       <div className="relative z-10 max-w-full md:max-w-[65%]">
         <div className="font-display text-[22px] sm:text-[26px] font-bold text-white pr-20 md:pr-0">
-          {greeting()}, {firstName} 👋
+          {getGreeting()}, {firstName} 👋
         </div>
         <div className="mt-2 text-[14px] sm:text-[15px] text-white/70">
-          You have {counts.pendingProposals} pending proposals and {counts.activeContracts} active contracts.
+          You have {stats.pendingProposals} pending proposals and {stats.activeContracts} active contracts.
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <button
@@ -68,5 +118,5 @@ export function WelcomeBanner({ user }: WelcomeBannerProps) {
         </div>
       </div>
     </div>
-   );
+  );
 }

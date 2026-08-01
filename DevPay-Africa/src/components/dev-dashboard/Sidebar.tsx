@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Home, Search, FileText, Briefcase, Wallet, MessageCircle, User, Settings,
   ChevronLeft, ChevronRight, Zap, Crown, Sparkles, CreditCard,
 } from "lucide-react";
-import { developer, counts } from "@/lib/dev-mock-data";
+import { useAuth } from "@/integrations/supabase/auth-context";
+import { supabase } from "@/integrations/supabase/client";
 import { useSidebarUI } from "./sidebar-context";
 import logo from "@/assets/devpay-logo.png";
 
@@ -15,23 +17,67 @@ type NavItem = {
   exact?: boolean;
 };
 
-const navItems: NavItem[] = [
-  { to: "/developer", label: "Overview", icon: Home, badge: 0, exact: true },
-  { to: "/developer/jobs", label: "Browse Jobs", icon: Search, badge: 0 },
-  { to: "/developer/jobs-for-you", label: "Jobs For You", icon: Sparkles, badge: 0 },
-  { to: "/developer/proposals", label: "My Proposals", icon: FileText, badge: counts.pendingProposals },
-  { to: "/developer/contracts", label: "Active Contracts", icon: Briefcase, badge: counts.activeContracts },
-  { to: "/developer/wallet", label: "Wallet", icon: Wallet, badge: 0 },
-  { to: "/developer/payment-methods", label: "Payment Methods", icon: CreditCard, badge: 0 },
-  { to: "/developer/messages", label: "Messages", icon: MessageCircle, badge: counts.unreadMessages },
-  { to: "/developer/profile", label: "My Profile", icon: User, badge: 0 },
-  { to: "/developer/settings", label: "Settings", icon: Settings, badge: 0 },
-];
-
 export function Sidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const { collapsed, toggle } = useSidebarUI();
+  const { profile, session } = useAuth();
+  const [stats, setStats] = useState({ pendingProposals: 0, activeContracts: 0, unreadMessages: 0 });
   const width = collapsed ? 76 : 240;
+  const displayName = profile?.full_name || session?.user?.email?.split("@")[0] || "Developer";
+  const isPro = Boolean(profile?.is_verified || session?.user?.app_metadata?.subscription_plan === "pro");
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setStats({ pendingProposals: 0, activeContracts: 0, unreadMessages: 0 });
+      return;
+    }
+
+    let active = true;
+
+    const loadStats = async () => {
+      try {
+        const [proposalRes, contractRes] = await Promise.all([
+          supabase.from("proposals").select("id", { count: "exact", head: true }).eq("developer_id", session.user.id),
+          supabase.from("contracts").select("id", { count: "exact", head: true }).eq("developer_id", session.user.id),
+        ]);
+
+        if (proposalRes.error) throw proposalRes.error;
+        if (contractRes.error) throw contractRes.error;
+
+        if (active) {
+          setStats({
+            pendingProposals: Number(proposalRes.count ?? 0),
+            activeContracts: Number(contractRes.count ?? 0),
+            unreadMessages: 0,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load sidebar stats", error);
+        if (active) {
+          setStats({ pendingProposals: 0, activeContracts: 0, unreadMessages: 0 });
+        }
+      }
+    };
+
+    void loadStats();
+
+    return () => {
+      active = false;
+    };
+  }, [session?.user?.id]);
+
+  const navItems: NavItem[] = [
+    { to: "/developer", label: "Overview", icon: Home, badge: 0, exact: true },
+    { to: "/developer/jobs", label: "Browse Jobs", icon: Search, badge: 0 },
+    { to: "/developer/jobs-for-you", label: "Jobs For You", icon: Sparkles, badge: 0 },
+    { to: "/developer/proposals", label: "My Proposals", icon: FileText, badge: stats.pendingProposals },
+    { to: "/developer/contracts", label: "Active Contracts", icon: Briefcase, badge: stats.activeContracts },
+    { to: "/developer/wallet", label: "Wallet", icon: Wallet, badge: 0 },
+    { to: "/developer/payment-methods", label: "Payment Methods", icon: CreditCard, badge: 0 },
+    { to: "/developer/messages", label: "Messages", icon: MessageCircle, badge: stats.unreadMessages },
+    { to: "/developer/profile", label: "My Profile", icon: User, badge: 0 },
+    { to: "/developer/settings", label: "Settings", icon: Settings, badge: 0 },
+  ];
 
   return (
     <aside
@@ -126,7 +172,7 @@ export function Sidebar() {
         <div className="mt-auto" />
 
         {/* Upgrade CTA — expanded */}
-        {!collapsed && developer.subscription_plan !== "pro" && (
+        {!collapsed && !isPro && (
           <div className="px-2 pt-3">
             <div
               className="rounded-xl p-3"
@@ -152,7 +198,7 @@ export function Sidebar() {
         )}
 
         {/* Pro badge — expanded + pro */}
-        {!collapsed && developer.subscription_plan === "pro" && (
+        {!collapsed && isPro && (
           <div className="px-2 pt-3">
             <div
               className="flex items-center gap-2 rounded-xl p-3"
@@ -175,24 +221,43 @@ export function Sidebar() {
           <div className="mt-3 flex flex-col items-center gap-2 pb-1">
             <div className="h-px w-8 bg-[color:var(--color-border)]" />
             <div
-              title={developer.subscription_plan === "pro" ? "Pro Developer" : "Upgrade to Pro"}
+              title={isPro ? "Pro Developer" : "Upgrade to Pro"}
               className="grid h-9 w-9 place-items-center rounded-[10px]"
               style={{
                 background:
-                  developer.subscription_plan === "pro"
+                  isPro
                     ? "rgba(245,166,35,0.10)"
                     : "rgba(0,198,167,0.10)",
                 border:
-                  developer.subscription_plan === "pro"
+                  isPro
                     ? "1px solid rgba(245,166,35,0.25)"
                     : "1px solid rgba(0,198,167,0.20)",
               }}
             >
-              {developer.subscription_plan === "pro" ? (
+              {isPro ? (
                 <Crown className="h-4 w-4 text-[color:var(--gold-brand)]" />
               ) : (
                 <Zap className="h-4 w-4 text-[color:var(--cyan-brand)]" />
               )}
+            </div>
+          </div>
+        )}
+
+        {!collapsed && (
+          <div className="px-2 pt-3">
+            <div
+              className="flex items-center gap-2 rounded-xl border px-3 py-2.5"
+              style={{ borderColor: "var(--color-border)", background: "rgba(255,255,255,0.03)" }}
+            >
+              <div className="grid h-8 w-8 place-items-center rounded-full bg-[color:var(--surface-hover)] text-[11px] font-bold text-[color:var(--cyan-brand)]">
+                {displayName.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-[12px] font-semibold text-white">{displayName}</div>
+                <div className="truncate text-[10px] text-[color:var(--text-muted)]">
+                  {isPro ? "Verified developer" : "Ready to ship"}
+                </div>
+              </div>
             </div>
           </div>
         )}

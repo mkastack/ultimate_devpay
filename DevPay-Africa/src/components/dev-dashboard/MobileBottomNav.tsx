@@ -13,7 +13,7 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
-import { counts, developer } from "@/lib/dev-mock-data";
+import { useAuth } from "@/integrations/supabase/auth-context";
 import { useTheme } from "@/lib/theme-context";
 
 type Item = {
@@ -28,11 +28,11 @@ const items: Item[] = [
   { to: "/developer", label: "Home", Icon: Home, exact: true },
   { to: "/developer/jobs", label: "Jobs", Icon: Search },
   { to: "/developer/jobs-for-you", label: "For You", Icon: Sparkles },
-  { to: "/developer/proposals", label: "Bids", Icon: FileText, badge: counts.pendingProposals },
-  { to: "/developer/contracts", label: "Deals", Icon: Briefcase, badge: counts.activeContracts },
+  { to: "/developer/proposals", label: "Bids", Icon: FileText, badge: 0 },
+  { to: "/developer/contracts", label: "Deals", Icon: Briefcase, badge: 0 },
   { to: "/developer/wallet", label: "Wallet", Icon: Wallet },
   { to: "/developer/payment-methods", label: "Pay", Icon: CreditCard },
-  { to: "/developer/messages", label: "Chat", Icon: MessageCircle, badge: counts.unreadMessages },
+  { to: "/developer/messages", label: "Chat", Icon: MessageCircle, badge: 0 },
   { to: "/developer/profile", label: "Profile", Icon: User },
   { to: "/developer/settings", label: "Settings", Icon: Settings },
 ];
@@ -49,7 +49,10 @@ function isActive(pathname: string, to: string, exact?: boolean) {
 export function MobileBottomNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { theme, toggle } = useTheme();
+  const { profile, session } = useAuth();
   const isProfile = pathname.startsWith("/developer/profile");
+  const displayName = profile?.full_name || session?.user?.email?.split("@")[0] || "Developer";
+  const isPro = Boolean(profile?.is_verified || session?.user?.app_metadata?.subscription_plan === "pro");
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 px-2 pb-2 pt-2 md:hidden">
@@ -116,12 +119,12 @@ export function MobileBottomNav() {
             aria-label="Profile"
             className="grid h-9 w-9 place-items-center rounded-full font-display text-[11px] font-bold"
             style={{
-              background: "linear-gradient(135deg, #6366f1, #a855f7)",
+              background: isPro ? "linear-gradient(135deg, #f59e0b, #f97316)" : "linear-gradient(135deg, #6366f1, #a855f7)",
               color: "#fff",
               border: isProfile ? "2px solid var(--cyan-brand)" : "2px solid transparent",
             }}
           >
-            {initials(developer.full_name)}
+            {initials(displayName)}
           </Link>
         </div>
       </nav>

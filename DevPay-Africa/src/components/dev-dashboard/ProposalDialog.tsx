@@ -4,8 +4,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { fmtGHS, fmtUSD, developer } from "@/lib/dev-mock-data";
+import { useAuth } from "@/integrations/supabase/auth-context";
 import { supabase } from "@/integrations/supabase/client";
+import { fmtGHS, fmtUSD } from "@/lib/dev-mock-data";
 
 export function ProposalDialog({
   open,
@@ -24,6 +25,7 @@ export function ProposalDialog({
   const [cover, setCover] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [aiBoosting, setAiBoosting] = useState(false);
+  const { profile, session } = useAuth();
 
   // Validation
   const titleError = title.trim().length > 0 && title.trim().length < 6 ? "Title is too short" : "";
@@ -44,12 +46,13 @@ export function ProposalDialog({
   // AI-generated preview summary
   const aiSummary = useMemo(() => {
     const t = (title || jobTitle || "your project").trim();
+    const displayName = profile?.full_name || session?.user?.email?.split("@")[0] || "Developer";
     return {
       hook: `Hi! I'd love to help build "${t.slice(0, 60)}".`,
-      strength: `I'm a ${developer.title} from ${developer.city} with ${developer.jobs_completed}+ shipped jobs and a ${developer.rating}★ rating.`,
+      strength: `I'm ${displayName} and I focus on shipping polished, reliable work with clear delivery and strong communication.`,
       plan: `I can deliver in ${days} day${days === 1 ? "" : "s"} for ${fmtUSD(bid)} (${fmtGHS(bid)}), broken into ${Math.max(1, Math.min(4, Math.ceil(days / 5)))} milestones.`,
     };
-  }, [title, jobTitle, bid, days]);
+  }, [title, jobTitle, bid, days, profile?.full_name, session?.user?.email]);
 
   function aiBoost() {
     setAiBoosting(true);
@@ -71,13 +74,13 @@ export function ProposalDialog({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Best-effort persistence; falls through on missing job_id.
         await supabase.from("proposals").insert({
           developer_id: user.id,
-          job_id: crypto.randomUUID(),
+          title: title.trim(),
           cover_letter: cover.trim(),
-          bid_usd: Math.round(bid),
-          days,
+          bid_amount: Math.round(bid),
+          delivery_days: days,
+          status: "pending",
         });
       }
     } catch {
